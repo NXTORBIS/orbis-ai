@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react'
-import { Circle, FileText, Info, Mic, Square, Trash2 } from 'lucide-react'
+import { Circle, FileText, Info, Mic, Trash2 } from 'lucide-react'
 import { SplitView, Surface } from '../ui'
 import { atText, mustStop, summaryNote, titleFrom, WHAT_IT_HEARS, withPart, type Meeting } from '../../../shared/meeting'
 import { voiceInput } from '../lib/voiceInput'
@@ -115,7 +115,7 @@ export default function MeetingView({ onClose, onNotify }: { onClose(): void; on
       actions={
         recording ? (
           <button type="button" className="queue-btn primary" onClick={() => void finish(recording)}>
-            <Square size={14} aria-hidden="true" /> Stop
+            Stop
           </button>
         ) : (
           <button type="button" className="queue-btn primary" onClick={start}>

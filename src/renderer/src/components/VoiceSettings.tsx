@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Check, Download, Mic, Trash2, X } from 'lucide-react'
+import { Check, Mic, Trash2 } from 'lucide-react'
 import type { ExperienceConfig } from '../../../shared/experience'
 import { PULSAR_MODELS, PULSAR_MODEL_INFO } from '../../../shared/pulsarModels'
 import type { PulsarDownloadProgress, PulsarHardwareInfo, PulsarModelId } from '../../../shared/pulsarModels'
@@ -150,7 +150,7 @@ export default function VoiceSettings(): React.JSX.Element {
               <div className="voice-model-actions">
                 {downloading ? (
                   <button type="button" className="galaxy-btn" onClick={() => void cancelDownload(id)}>
-                    <X size={12} /> Cancel
+                    Cancel
                   </button>
                 ) : installed ? (
                   <>
@@ -165,7 +165,7 @@ export default function VoiceSettings(): React.JSX.Element {
                   </>
                 ) : (
                   <button type="button" className="galaxy-btn" onClick={() => void download(id)}>
-                    <Download size={12} /> Download
+                    Download
                   </button>
                 )}
               </div>

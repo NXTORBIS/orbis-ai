@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { FEATURE_GROUPS } from '../lib/features'
+import type { FeatureGroup } from '../lib/features'
 import type { AppFeature } from '../../../shared/commandCenter'
 import { avatarFor, avatarStyle } from '../../../shared/avatars'
 import type { LucideIcon } from 'lucide-react'
 import type { SettingsSectionId } from '../../../shared/settingsSections'
 import type { NoticeKind } from '../lib/notices'
-import { Archive, ArchiveRestore, ChevronDown, ChevronRight, CircleHelp, Download, Dices, FolderOpen, Globe, Keyboard, Pencil, Pin, PinOff, Search, SquarePen, Trash2, X } from 'lucide-react'
+import { Archive, ArchiveRestore, ChevronDown, ChevronRight, CircleHelp, Download, Dices, FolderOpen, Globe, Keyboard, LayoutGrid, Pencil, Pin, PinOff, Search, SquarePen, Trash2, X } from 'lucide-react'
 import type { Conversation } from '../../../shared/types'
 import type { StreamState } from '../lib/notices'
 import { groupConversations } from '../lib/utils'
@@ -59,6 +59,31 @@ interface Props {
   onFeature(id: FeatureId): void
   /** Which one is showing, so the row for it reads as the place you are rather than a thing you could do. */
   feature: FeatureId | null
+  /**
+   * The screens this person has showing, grouped, from `featureGroupsFor` in `lib/features.ts`.
+   *
+   * Handed in rather than imported. The sidebar used to read the whole list itself, which meant it could only ever
+   * draw all nineteen; a menu built from the full list is a menu that offers screens somebody switched off, and the
+   * only reliable way to stop that is for the full list not to be reachable from here at all. Empty groups have
+   * already been dropped, so there is never a heading over nothing.
+   */
+  features: readonly FeatureGroup[]
+  /**
+   * Whether Chance is in this person's menu.
+   *
+   * Chance is the one core surface that is a choice, and it is not one of the screens above -- it is framed in its
+   * own window and opens through `onChance`. So it needs its own answer, or somebody who switched it off would still
+   * be looking at the row for it.
+   */
+  chanceShown: boolean
+  /**
+   * Whether the browser is open.
+   *
+   * Pressing Browser really does start Chromium, but the window said nothing about it: the row stayed plain while
+   * Files lights up, so somebody who did not spot the separate window had every reason to think the button was
+   * broken. The row is told, the same as Files is.
+   */
+  browserOpen: boolean
 }
 
 /** Orbis's own screens, in the order they appear. The id is what App.tsx renders. */
@@ -158,7 +183,7 @@ export default function Sidebar(props: Props): React.JSX.Element {
     { label: 'Files', icon: FolderOpen, onClick: props.onImages, active: props.imagesOpen, badge: props.imageCount },
     { label: 'Chance', icon: Dices, onClick: props.onChance, active: props.chanceOpen },
     // Everything that manages browsing lives in the browser's own sidebar now. This is the way to it.
-    { label: 'Browser', icon: Globe, onClick: props.onBrowser, shortcut: 'Ctrl+Shift+B' }
+    { label: 'Browser', icon: Globe, onClick: props.onBrowser, active: props.browserOpen, shortcut: 'Ctrl+Shift+B' }
   ]
 
   const isOpen = (id: string): boolean => Boolean(query.trim()) || sections[id] !== false
@@ -283,7 +308,7 @@ export default function Sidebar(props: Props): React.JSX.Element {
                     left somebody reading all eleven to find either. Under their categories most of the list can
                     be skipped at a glance.
                   */}
-                  {FEATURE_GROUPS.map((group) => (
+                  {props.features.map((group) => (
                     <div key={group.id} className="sb-menu-group" role="group" aria-label={group.label}>
                       <p className="sb-menu-head">{group.label}</p>
                       {group.items.map(({ id, label, icon: Icon, hint }) => (
@@ -304,6 +329,8 @@ export default function Sidebar(props: Props): React.JSX.Element {
                       ))}
                     </div>
                   ))}
+                  {/* Chance is a choice like the rest, so a person who switched it off does not see the row. */}
+                  {props.chanceShown && (
                   <div className="sb-menu-group" role="group" aria-label="Chance">
                     <button
                       type="button"
@@ -319,13 +346,32 @@ export default function Sidebar(props: Props): React.JSX.Element {
                       Chance
                     </button>
                   </div>
+                  )}
                   {/*
-                    Settings is not a row here.
+                    Settings as a whole is not a row here.
 
                     It is on the user chip at the foot of this sidebar, which opens it at Account, and on Ctrl+comma.
                     A third way in, in a list of screens, made a settings dialog look like one more feature.
+
+                    The one Settings screen that *is* a row is the next one, and it is here because this menu is the
+                    thing it changes. Somebody looking at a short list and wondering where the rest of Orbis went is
+                    looking at this menu when they wonder it, and "go to Settings and find the right section" is an
+                    instruction rather than an answer. So the way to change the list sits at the bottom of the list.
                   */}
                   <div className="menu-sep" />
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="menu-item"
+                    title="Turn Orbis’s optional screens on or off. Nothing is ever deleted."
+                    onClick={() => {
+                      props.onSettings('features')
+                      setBrandOpen(false)
+                    }}
+                  >
+                    <LayoutGrid size={14} />
+                    Choose your features
+                  </button>
                   <button
                     type="button"
                     role="menuitem"

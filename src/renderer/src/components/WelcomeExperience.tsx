@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
-import { Eye, EyeOff } from 'lucide-react'
+import { Check, Eye, EyeOff } from 'lucide-react'
 import ring from '../assets/orbis-ring-glass.png'
 import logo from '../assets/orbis-logo.png'
 import { confirmPassword, judgePassword, PASSWORD_MAX } from '../../../shared/passwordStrength'
 import { AVATARS, avatarFor, avatarStyle, suggestFor } from '../../../shared/avatars'
+import { CHOICE_GROUPS, choiceEntry } from '../../../shared/featureChoiceGroups'
+import { STARTING_IDS, chooseVisible, isEssential, isVisible, newChoice } from '../../../shared/featureVisibility'
+import { CHOICE_ICONS } from '../lib/features'
 import './welcome.css'
 
 interface Props {
@@ -43,15 +46,23 @@ interface Props {
   lockedReason?: string | null
   /** Gives the password to the account. Resolves with the reason when it was not accepted. */
   onUnlock(password: string): Promise<{ ok: true } | { ok: false; why: string; waitMs: number }>
+  /**
+   * Saves which optional screens the person asked to see, as the last step of setting up.
+   *
+   * Resolves with `refused` set when nothing was saved, and the screen says so rather than showing the new set as
+   * though it had been kept. Resolving with `refused: null` is the only thing that counts as saved.
+   */
+  onChooseFeatures(features: readonly string[]): Promise<{ refused: string | null }>
   /** The exit transition has started; the main interface should begin appearing. */
   onEnter(): void
   /** The exit transition has finished and the welcome layer can be removed. */
   onFinished(): void
 }
 
-type Phase = 'intro' | 'name' | 'saving' | 'saveError' | 'unlock' | 'unlocking' | 'greet' | 'exit'
+type Phase = 'intro' | 'name' | 'saving' | 'choosing' | 'choosingSave' | 'saveError' | 'unlock' | 'unlocking' | 'greet' | 'exit'
 
 const TITLE = 'Welcome to Orbis'
+const CHOOSE_TITLE = 'What do you want Orbis for?'
 const NAME_MAX = 40
 const INTRO_MS = 3500
 const TYPE_MS = 42
@@ -106,6 +117,21 @@ function useParticles(canvasRef: React.RefObject<HTMLCanvasElement | null>, redu
     let last = start
     let points: { x: number; y: number; r: number; vx: number; vy: number; alpha: number; phase: number; born: number }[] = []
 
+    /*
+     * The star colour comes from the theme, which a canvas cannot be told in CSS -- so it is read off the element
+     * and kept. It used to be a pale cyan written here, and pale cyan on the light theme's white is nothing at
+     * all: the whole field simply stopped existing when the theme turned, with no error anywhere to say so.
+     *
+     * Read once rather than every frame, because getComputedStyle forces layout and this runs at 60fps. The theme
+     * is an attribute on the root element, so a change to it is exactly when the cached value stops being true.
+     */
+    let star = '#c4f1ff'
+    const readStar = (): void => {
+      const seen = getComputedStyle(canvas).getPropertyValue('--star').trim()
+      if (seen) star = seen
+    }
+    readStar()
+
     const seed = (): void => {
       const count = Math.round(Math.min(64, Math.max(24, (width * height) / 36000)))
       points = Array.from({ length: count }, () => ({
@@ -125,7 +151,7 @@ function useParticles(canvasRef: React.RefObject<HTMLCanvasElement | null>, redu
       const dt = Math.min(now - last, 50)
       last = now
       ctx.clearRect(0, 0, width, height)
-      ctx.fillStyle = '#c4f1ff'
+      ctx.fillStyle = star
       for (const p of points) {
         if (!reduced) {
           p.x = (p.x + p.vx * dt + 1) % 1
@@ -154,6 +180,15 @@ function useParticles(canvasRef: React.RefObject<HTMLCanvasElement | null>, redu
     const observer = new ResizeObserver(resize)
     observer.observe(canvas)
     resize()
+
+    // Nothing is moving under reduced motion, so the field has to be repainted when the theme turns or it keeps
+    // the colour it was first drawn in.
+    const themed = new MutationObserver(() => {
+      readStar()
+      if (reduced) draw(performance.now())
+    })
+    themed.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
+
     const loop = (now: number): void => {
       draw(now)
       frame = requestAnimationFrame(loop)
@@ -162,6 +197,7 @@ function useParticles(canvasRef: React.RefObject<HTMLCanvasElement | null>, redu
     return () => {
       cancelAnimationFrame(frame)
       observer.disconnect()
+      themed.disconnect()
     }
   }, [canvasRef, reduced])
 }
@@ -196,7 +232,7 @@ function useParallax(rootRef: React.RefObject<HTMLDivElement | null>, reduced: b
  * The Orbis startup screen. Every launch opens on it while local data loads; a new installation then asks for the
  * user's name, and a configured one hands over to the real interface as soon as it is ready.
  */
-export default function WelcomeExperience({ ready, needsName, needsUnlock, lockedReason, loadError, effects, onRetryLoad, onComplete, onUnlock, onEnter, onFinished }: Props): React.JSX.Element {
+export default function WelcomeExperience({ ready, needsName, needsUnlock, lockedReason, loadError, effects, onRetryLoad, onComplete, onChooseFeatures, onUnlock, onEnter, onFinished }: Props): React.JSX.Element {
   const reduced = !effects
   const [phase, setPhase] = useState<Phase>(loadError ? 'name' : 'intro')
   const [introDone, setIntroDone] = useState(false)
@@ -230,7 +266,16 @@ export default function WelcomeExperience({ ready, needsName, needsUnlock, locke
    * password" off the bottom, so the one thing that must be read was the one thing nobody saw. Two short screens
    * instead -- who you are, then how it is locked -- each of which fits without scrolling.
    */
-  const [step, setStep] = useState<'who' | 'secret'>('who')
+  const [step, setStep] = useState<'who' | 'secret' | 'features'>('who')
+  /**
+   * The optional screens the person has asked to see, while they are choosing.
+   *
+   * It starts as the set a brand-new profile would get anyway, so somebody who presses Continue without touching
+   * anything gets exactly what skipping gives them, and nobody is asked to build a menu from nothing.
+   */
+  const [picked, setPicked] = useState<readonly string[]>(() => STARTING_IDS.filter((id) => !isEssential(id)) as readonly string[])
+  /** What Orbis said when it would not save the choice. Shown as itself; the new set is never claimed as kept. */
+  const [chooseProblem, setChooseProblem] = useState('')
   const [savedName, setSavedName] = useState('')
   /** What the person is typing to get in, and what Orbis last said about it. */
   const [unlockWith, setUnlockWith] = useState('')
@@ -239,6 +284,7 @@ export default function WelcomeExperience({ ready, needsName, needsUnlock, locke
   const rootRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const chooseRef = useRef<HTMLElement>(null)
 
   useParticles(canvasRef, reduced)
   useParallax(rootRef, reduced)
@@ -271,8 +317,10 @@ export default function WelcomeExperience({ ready, needsName, needsUnlock, locke
   })()
 
   const formPhase = phase === 'name' || phase === 'saving'
+  const choosePhase = phase === 'choosing' || phase === 'choosingSave'
   const unlockPhase = phase === 'unlock' || phase === 'unlocking'
   const title = useTyped(TITLE, (formPhase || unlockPhase) && !loadError, reduced ? 0 : TYPE_MS)
+  const chooseTitle = useTyped(CHOOSE_TITLE, choosePhase, reduced ? 0 : TYPE_MS)
   const greeting = useTyped(`Welcome, ${savedName}.`, (phase === 'greet' || phase === 'exit') && Boolean(savedName), reduced ? 0 : GREET_TYPE_MS)
 
   const clean = cleanName(name)
@@ -359,6 +407,18 @@ export default function WelcomeExperience({ ready, needsName, needsUnlock, locke
     return () => clearTimeout(timer)
   }, [ready, loadError])
 
+  /*
+   * The feature step takes the focus when it opens.
+   *
+   * The button that was pressed to get here has gone, so without this the focus falls back to the document and the
+   * next Tab starts from the top of the page -- which on a step made of eighteen controls is the difference between
+   * usable by keyboard alone and not. The panel itself takes it rather than the first card, because landing on a
+   * card reads as having already chosen something.
+   */
+  useEffect(() => {
+    if (phase === 'choosing') chooseRef.current?.focus()
+  }, [phase])
+
   // The field is ready for typing as soon as it appears, even while the heading is still typing.
   useEffect(() => {
     if ((phase === 'name' || phase === 'unlock') && !loadError) inputRef.current?.focus()
@@ -404,13 +464,59 @@ export default function WelcomeExperience({ ready, needsName, needsUnlock, locke
       // Forgotten the moment it has been used. It is not needed again, and what is not held cannot leak.
       setPassword('')
       setAgain('')
-      setPhase('greet')
+      /*
+       * The account exists now, so the third step is a question rather than a gate: whatever happens next, somebody
+       * is already set up and one button away from the chat. That is deliberately this way round -- asking about
+       * features before the account would make a preference a condition of being able to use Orbis at all.
+       */
+      setStep('features')
+      setPhase('choosing')
     } catch {
       submitting.current = false
       // The name and both passwords are left exactly as typed: a failure to save is not a reason to make somebody
       // choose a password again.
       setPhase('saveError')
     }
+  }
+
+  /*
+   * What the picked set really means, asked of the one function rather than worked out here.
+   *
+   * Arena is a front door onto Football and F1, so with both of those off it is a heading over an empty page --
+   * `isVisible` is the only thing that knows that, and asking it is how the screen stays honest about what somebody
+   * has just chosen rather than ticking a box that will not appear.
+   */
+  const candidate = chooseVisible(newChoice(), picked).value
+  const pickedCount = picked.length
+
+  const toggle = (id: string): void => {
+    setChooseProblem('')
+    setPicked((was) => (was.includes(id) ? was.filter((one) => one !== id) : [...was, id]))
+  }
+
+  /** Keeps the choice, or says why it was not kept. Either way, the next thing is Orbis. */
+  const keepChoice = async (save: boolean): Promise<void> => {
+    if (phase === 'choosingSave') return
+    if (!save) {
+      // Skipping writes nothing at all. The usual set is what an untouched profile already has, so saving it would
+      // be recording an answer somebody did not give.
+      setPhase('greet')
+      return
+    }
+    setPhase('choosingSave')
+    try {
+      const said = await onChooseFeatures(picked)
+      if (said.refused) {
+        setChooseProblem(said.refused)
+        setPhase('choosing')
+        return
+      }
+    } catch {
+      setChooseProblem('Orbis could not save which features you want to see. Nothing has been changed, and you can choose again in Settings.')
+      setPhase('choosing')
+      return
+    }
+    setPhase('greet')
   }
 
   const tryUnlock = async (): Promise<void> => {
@@ -671,6 +777,81 @@ export default function WelcomeExperience({ ready, needsName, needsUnlock, locke
           Press Enter to continue
         </p>
       </form>
+    )
+  } else if (choosePhase) {
+    /*
+     * Choosing what you want to see.
+     *
+     * Orbis has nineteen feature screens and they were all in one flat menu, so everybody got everything and nobody
+     * found anything. This is where that stops being Orbis's decision. Sixteen of them are a choice, offered under
+     * four headings, because sixteen rows flat is a list nobody reads.
+     *
+     * Three things this must not do, and each of them was a way of getting it wrong. It must not stand between
+     * somebody and the chat -- the account is already made, Skip is right there, and neither button can fail into a
+     * dead end. It must not require a choice -- what is already ticked is exactly what skipping gives, so pressing
+     * Continue without a thought is a sensible answer. And it must not pretend: a box ticked for a screen that would
+     * not appear says so, in the words `isVisible` gives it.
+     */
+    stage = (
+      <section className="welcome-panel is-choosing" aria-labelledby="welcome-choose-title" ref={chooseRef} tabIndex={-1}>
+        <h1 className="welcome-title is-small" id="welcome-choose-title" aria-label={CHOOSE_TITLE}>
+          <span aria-hidden="true">{chooseTitle.text}</span>
+          {!chooseTitle.done && <span className="welcome-caret" aria-hidden="true" />}
+        </h1>
+        <p className={`welcome-sub${chooseTitle.done ? ' is-shown' : ''}`}>Pick whatever looks useful. Leave the rest; it stays out of your way.</p>
+
+        <div className="welcome-choose">
+          {CHOICE_GROUPS.map((group, groupAt) => (
+            <div className="welcome-choose-group" key={group.id} style={{ ['--at' as string]: String(groupAt) }}>
+              <h2 className="welcome-choose-heading" id={`welcome-choose-${group.id}`}>
+                {group.label}
+              </h2>
+              <p className="welcome-choose-blurb">{group.blurb}</p>
+              <div className="welcome-choose-grid" role="group" aria-labelledby={`welcome-choose-${group.id}`}>
+                {group.ids.map((id) => {
+                  const entry = choiceEntry(id)
+                  const Icon = CHOICE_ICONS[id]
+                  const on = picked.includes(id)
+                  // Ticked, and it still would not appear: said on the card rather than left to be discovered.
+                  const empty = on && !isVisible(id, candidate)
+                  return (
+                    <button key={id} type="button" role="checkbox" aria-checked={on} className={`welcome-choose-card${on ? ' is-on' : ''}`} onClick={() => toggle(id)}>
+                      <span className="welcome-choose-icon" aria-hidden="true">{Icon ? <Icon size={17} /> : null}</span>
+                      <span className="welcome-choose-name">{entry.label}</span>
+                      <span className="welcome-choose-line">{entry.blurb}</span>
+                      <span className="welcome-choose-tick" aria-hidden="true">
+                        <Check size={13} strokeWidth={3} />
+                      </span>
+                      {empty && <span className="welcome-choose-warn">Turn on a sport and this has something on it.</span>}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <p className="welcome-note" role="status">
+          {pickedCount === 0
+            ? 'Nothing extra chosen. The chat, the browser, your files and the rest of the basics are always there.'
+            : `${pickedCount} chosen, on top of the basics.`}
+        </p>
+        {chooseProblem && (
+          <p className="welcome-note" role="alert">
+            {chooseProblem}
+          </p>
+        )}
+
+        <button type="button" className="welcome-continue" disabled={phase === 'choosingSave'} onClick={() => void keepChoice(true)}>
+          {phase === 'choosingSave' ? 'Saving...' : 'Continue'}
+        </button>
+        <button type="button" className="welcome-secondary" onClick={() => void keepChoice(false)}>
+          Skip, and use the usual set
+        </button>
+        <p className="welcome-note is-quiet">
+          You can turn any of these on or off later in Settings. Nothing is ever deleted: a feature you leave off keeps everything it has, and comes straight back.
+        </p>
+      </section>
     )
   } else if (unlockPhase) {
     /*

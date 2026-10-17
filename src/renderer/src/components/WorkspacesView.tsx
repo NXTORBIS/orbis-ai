@@ -3,7 +3,7 @@ import { newWorkspace } from '../../../shared/workspaces'
 import ProjectFileList from './ProjectFileList'
 import { CHAT_MODELS, modelLabel } from '../../../shared/models'
 import { AUTO_MODEL } from '../../../shared/modelRoute'
-import { Check, Copy, FolderOpen, Layers, Plus, RefreshCw, Save, Trash2 } from 'lucide-react'
+import { Check, Copy, Layers, Plus, Save, Trash2 } from 'lucide-react'
 import { Modal, Surface } from '../ui'
 import type { Workspace, WorkspaceSummary } from '../../../shared/workspaces'
 import { WORKSPACE_COLORS } from '../../../shared/workspaces'
@@ -225,20 +225,22 @@ export default function WorkspacesView({ onClose, onNotify }: { onClose(): void;
             </label>
             <div className="space-actions">
               <button type="button" className="queue-btn primary small" disabled={busy === workspace.id} onClick={() => void askToOpen(workspace.id, true)}>
-                <FolderOpen size={13} /> Open
+                Open
               </button>
               <button type="button" className="queue-btn small" disabled={busy === workspace.id} onClick={() => void askToOpen(workspace.id, false)} title="Open its pages without closing what is open">
                 <Layers size={13} /> Add
               </button>
               <button type="button" className="queue-btn small" onClick={() => void window.api.updateWorkspaceFromWindow(workspace.id).then((saved) => onNotify(`“${saved.name}” now holds ${saved.tabs.length} page${saved.tabs.length === 1 ? '' : 's'}`)).catch((err: unknown) => onNotify(err instanceof Error ? err.message : 'Could not update', 'error'))} title="Save what is open over this workspace">
-                <RefreshCw size={13} /> Update
+                Update
               </button>
-              <button type="button" className="icon-btn" aria-label={`Duplicate ${workspace.name}`} onClick={() => void window.api.duplicateWorkspace(workspace.id)}>
-                <Copy size={14} />
-              </button>
-              <button type="button" className="icon-btn danger" aria-label={`Delete ${workspace.name}`} onClick={() => void window.api.removeWorkspace(workspace.id).then(() => onNotify('Workspace deleted'))}>
-                <Trash2 size={14} />
-              </button>
+              <span className="space-actions-more">
+                <button type="button" className="icon-btn" aria-label={`Duplicate ${workspace.name}`} onClick={() => void window.api.duplicateWorkspace(workspace.id)}>
+                  <Copy size={14} />
+                </button>
+                <button type="button" className="icon-btn danger" aria-label={`Delete ${workspace.name}`} onClick={() => void window.api.removeWorkspace(workspace.id).then(() => onNotify('Workspace deleted'))}>
+                  <Trash2 size={14} />
+                </button>
+              </span>
             </div>
           </div>
         ))}

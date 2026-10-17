@@ -1,7 +1,8 @@
 import { useEffect } from 'react'
-import { Download, Images, MessageSquare, Pencil, X } from 'lucide-react'
+import { Download, MessageSquare, Pencil } from 'lucide-react'
 import type { GalleryImage } from '../lib/imageEditor'
 import type { NoticeKind } from '../lib/notices'
+import { EmptyState, ViewHeader } from '../ui'
 
 interface Props {
   images: GalleryImage[]
@@ -23,24 +24,16 @@ export default function ImagesView({ images, onClose, onOpenChat, onEdit, onNoti
 
   return (
     <section className="images-view" aria-label="Images">
-      <header className="images-head">
-        <div>
-          <h2>Images</h2>
-          <span className="hud-label">
-            {images.length} {images.length === 1 ? 'image' : 'images'} created
-          </span>
-        </div>
-        <button type="button" className="sb-icon" aria-label="Close images" title="Close (Esc)" onClick={onClose}>
-          <X size={18} />
-        </button>
-      </header>
+      <ViewHeader
+        className="images-head"
+        title="Images"
+        note={`${images.length} ${images.length === 1 ? 'image' : 'images'} created`}
+        onClose={onClose}
+        closeLabel="Close images"
+      />
 
       {images.length === 0 ? (
-        <div className="images-empty">
-          <Images size={30} />
-          <p>Images you create will appear here.</p>
-          <small>Try asking Orbis to “draw a lighthouse at dusk”.</small>
-        </div>
+        <EmptyState>No images yet. Ask Orbis to draw something — “a lighthouse at dusk”.</EmptyState>
       ) : (
         <div className="images-grid">
           {images.map((image) => (

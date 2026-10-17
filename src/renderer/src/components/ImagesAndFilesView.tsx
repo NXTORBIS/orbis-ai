@@ -1,7 +1,10 @@
 import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
-import { ArrowLeft, Download, FolderOpen, Globe, Images, MessageSquare, Pencil } from 'lucide-react'
+import { ArrowLeft, Download, Globe, Images, MessageSquare, Pencil } from 'lucide-react'
 import type { GalleryImage } from '../lib/imageEditor'
 import type { NoticeKind } from '../lib/notices'
+import { useSurface } from '../lib/surfaces'
+import { filesViewSurface } from './filesSurfaces'
+import { EmptyState } from '../ui'
 
 const FilesHost = lazy(() => import('../features/files/FilesHost'))
 
@@ -30,6 +33,22 @@ export default function ImagesAndFilesView({ images, openTool, onClose, onOpenCh
 
   const selectTab = useCallback((t: Tab) => setTab(t), [])
 
+  /*
+   * What Orbis may work on this screen.
+   *
+   * Only the tab strip, because that is all this screen owns: everything that can be done to files is inside the
+   * frame, and the frame declares it itself (see `FilesHost`). Setting the tab to `files` is also the route there,
+   * which is why it is a control rather than three buttons.
+   */
+  useSurface(
+    filesViewSurface({
+      tab: () => tab,
+      setTab: (id) => selectTab(id as Tab),
+      made: () => images.length,
+      close: onClose
+    })
+  )
+
   return (
     <section className="images-view files-fullscreen" aria-label="Files">
       <header className="images-head">
@@ -42,7 +61,7 @@ export default function ImagesAndFilesView({ images, openTool, onClose, onOpenCh
             className={`files-tab${tab === 'files' ? ' active' : ''}`}
             onClick={() => selectTab('files')}
           >
-            <FolderOpen size={15} /> Files
+            Files
           </button>
           <button
             type="button"
@@ -65,11 +84,7 @@ export default function ImagesAndFilesView({ images, openTool, onClose, onOpenCh
       {tab === 'created' && (
         <>
           {images.length === 0 ? (
-            <div className="images-empty">
-              <Images size={30} />
-              <p>Images you create will appear here.</p>
-              <small>Try asking Orbis to "draw a lighthouse at dusk".</small>
-            </div>
+            <EmptyState>No images yet. Ask Orbis to draw something — “a lighthouse at dusk”.</EmptyState>
           ) : (
             <div className="images-grid">
               {images.map((image) => (
@@ -105,7 +120,7 @@ export default function ImagesAndFilesView({ images, openTool, onClose, onOpenCh
 
       {tab === 'files' && (
         <div className="files-content">
-          <Suspense fallback={<div className="images-empty"><p>Loading Orbis Files…</p></div>}>
+          <Suspense fallback={<p className="view-empty">Loading Orbis Files…</p>}>
             <FilesHost tool={openTool && openTool !== 'universeExplorer' ? openTool : undefined} />
           </Suspense>
         </div>
@@ -113,7 +128,7 @@ export default function ImagesAndFilesView({ images, openTool, onClose, onOpenCh
 
       {tab === 'universe' && (
         <div className="files-content">
-          <Suspense fallback={<div className="images-empty"><p>Loading Universe…</p></div>}>
+          <Suspense fallback={<p className="view-empty">Loading Universe…</p>}>
             <FilesHost tool="universeExplorer" />
           </Suspense>
         </div>

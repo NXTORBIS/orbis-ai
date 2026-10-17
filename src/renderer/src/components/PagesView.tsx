@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ArrowLeft, ArrowRight, Check, Equal, FlaskConical, Info, PenLine, Ruler, Search, ShieldCheck, Star, WifiOff, Wrench, X } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Check, Equal, FlaskConical, Info, PenLine, Ruler, ShieldCheck, Star, WifiOff, Wrench, X } from 'lucide-react'
 import type { NoticeKind } from '../lib/notices'
 import type { PageCard, PageCategoryNode, PageComputeResult, PagePermission, PageSearchHit } from '../../../shared/types'
 import { BuilderPanel, ComposePanel, DiagnosticsPanel, PackagePanel, STUDIO_TABS, type StudioTab } from './PageStudio'
 import { LAB_PAGES } from './PageLabs'
 import { Plot as PagePlot, type Series } from './PageTools'
 import CodePageStudio from './CodePageStudio'
-import { SplitView, Surface } from '../ui'
+import { SearchBox, SplitView, Surface } from '../ui'
+import { useSurface } from '../lib/surfaces'
+import DeclareSurface from './DeclareSurface'
+import { openPageSurface, pagesSurface, pageStudioSurface, unitConverterSurface } from './pagesSurfaces'
 import { ApplicationsPanel } from './PageApplications'
 import { DescribePanel, GeneratedHistory, RunDocument } from './PageDescribe'
 import type { PageDocument } from '../../../shared/pages/builder'
@@ -117,21 +120,31 @@ export default function PagesView({
     }
   }, [query])
 
-  const openAddress = useCallback(
-    async (url: string) => {
+  /**
+   * Opens a Page by address, and says what happened rather than deciding what to do about it.
+   *
+   * One route, with the complaining left to the caller: a click says it on screen, and something that asked for it
+   * needs the register's own sentence back instead -- "that Page is not in this library" is the useful part, and a
+   * notice nobody is looking at is not an answer.
+   */
+  const openUrl = useCallback(
+    async (url: string): Promise<{ page: PageCard } | { problem: string }> => {
       const result = await window.api.pagesOpen(url)
-      if ('error' in result) {
-        onNotify(result.message ?? 'That Page could not be opened', 'error')
-        return
-      }
-      if (!result.found) {
-        onNotify(result.message, 'error')
-        return
-      }
+      if ('error' in result) return { problem: result.message ?? 'That Page could not be opened' }
+      if (!result.found) return { problem: result.message }
       setScreen({ kind: 'page', page: result.page })
       void load()
+      return { page: result.page }
     },
-    [load, onNotify]
+    [load]
+  )
+
+  const openAddress = useCallback(
+    async (url: string) => {
+      const got = await openUrl(url)
+      if ('problem' in got) onNotify(got.problem, 'error')
+    },
+    [openUrl, onNotify]
   )
 
   // Asked for by something other than a click. Opened once per address, so a re-render does not reopen it.
@@ -139,26 +152,17 @@ export default function PagesView({
     if (landOn) void openAddress(landOn)
   }, [landOn, openAddress])
 
-  const open = useCallback(
-    async (page: PageCard) => {
-      const result = await window.api.pagesOpen(page.url)
-      if ('error' in result) {
-        onNotify(result.message ?? 'That Page could not be opened', 'error')
-        return
-      }
-      if (!result.found) {
-        onNotify(result.message, 'error')
-        return
-      }
-      setScreen({ kind: 'page', page: result.page })
-      void load()
-    },
-    [load, onNotify]
-  )
+  const open = useCallback((page: PageCard) => openAddress(page.url), [openAddress])
 
-  const toggleFavourite = useCallback(
-    async (page: PageCard) => {
-      const result = await window.api.pagesFavourite(page.pageId, !page.favourite)
+  /**
+   * Marks a Page, or unmarks it.
+   *
+   * Apart from the star so that the star and the declared action both go through exactly this: the star knows it is
+   * inverting what the card shows, and something that was told which way round to leave it does not have to guess.
+   */
+  const setFavourite = useCallback(
+    async (page: PageCard, on: boolean) => {
+      const result = await window.api.pagesFavourite(page.pageId, on)
       if ('error' in result) {
         onNotify(result.message ?? 'That could not be saved', 'error')
         return
@@ -168,11 +172,31 @@ export default function PagesView({
     [load, onNotify]
   )
 
+  const toggleFavourite = useCallback((page: PageCard) => setFavourite(page, !page.favourite), [setFavourite])
+
   const shown = useMemo(() => {
     if (hits !== null) return hits.map((one) => one.page)
     if (category === null) return pages
     return pages.filter((page) => page.categories.some((one) => one === category || one.startsWith(`${category}.`)))
   }, [hits, category, pages])
+
+  /**
+   * Every subject, flattened, with the path each is chosen by.
+   *
+   * The tree is what the side list draws; a flat list is what somebody naming one needs, because “calculus” is a
+   * subject whether or not anybody knows it lives under maths.
+   */
+  const flatSubjects = useMemo(() => {
+    const out: { path: string; name: string; total: number }[] = []
+    const walk = (nodes: PageCategoryNode[]): void => {
+      for (const node of nodes) {
+        out.push({ path: node.path, name: node.name, total: node.total })
+        walk(node.children)
+      }
+    }
+    walk(categories)
+    return out
+  }, [categories])
 
   /**
    * What the right-hand half is called. The subject is stored as a path, so the readable name has to come out of the
@@ -195,10 +219,62 @@ export default function PagesView({
     return name === null ? 'Pages' : `Pages in ${name}`
   }, [hits, category, categories])
 
+  // ---------------------------------------------------------------- what Orbis may work here
+  //
+  // Above the early returns because it is a hook. The studio and an open Page declare themselves where they are, in
+  // the branches below and in `PageFrame`, so each exists exactly while its screen does.
+  useSurface(
+    pagesSurface({
+      screen: () => screen.kind,
+      search: () => query,
+      setSearch: setQuery,
+      subject: () => category,
+      setSubject: setCategory,
+      subjects: () => flatSubjects,
+      pages: () => pages.map((one) => ({ pageId: one.pageId, slug: one.slug, title: one.title, url: one.url, favourite: one.favourite })),
+      unavailable: () => unavailable.map((one) => ({ title: one.title })),
+      problems: () => problems,
+      loading: () => loading,
+      open: async (address) => {
+        // An address, a slug or a title: the library is asked first so the words on a card work as well as the URL.
+        const asked = String(address).trim()
+        const found = pages.find((one) => one.url === asked || one.slug === asked || one.title === asked)
+        const notHere = unavailable.find((one) => one.slug === asked || one.title === asked || one.url === asked)
+        if (!found && notHere) throw new Error(`${notHere.title} is in the register and not available in this profile.`)
+        const got = await openUrl(found?.url ?? asked)
+        if ('problem' in got) throw new Error(got.problem)
+        return { title: got.page.title, url: got.page.url, slug: got.page.slug }
+      },
+      setFavourite: async (address, on) => {
+        const asked = String(address).trim()
+        const found = pages.find((one) => one.url === asked || one.slug === asked || one.title === asked)
+        if (!found) throw new Error(`There is no Page called “${asked}” in this library.`)
+        await setFavourite(found, on)
+      },
+      setScreen: (id) => {
+        // A Page needs an address, so this says so rather than quietly staying put.
+        if (id === 'page') throw new Error('A Page has to be named. Do pages/open with its address, slug or title.')
+        if (id === 'studio') setScreen({ kind: 'studio', tab: 'builder' })
+        else if (id === 'write') setScreen({ kind: 'write' })
+        else setScreen({ kind: 'library' })
+      },
+      close: onClose
+    })
+  )
+
   if (screen.kind === 'studio') {
     const current = screen.tab
     return (
       <div className="view pages-view" role="region" aria-label="Page studio">
+        {/* Draws nothing: it registers the studio for as long as the studio is what is on screen. */}
+        <DeclareSurface
+          declaration={pageStudioSurface({
+            tab: () => current,
+            setTab: (id) => setScreen({ kind: 'studio', tab: id as StudioTab }),
+            tabs: STUDIO_TABS.map((one) => ({ id: one.id, label: one.label })),
+            back: () => setScreen({ kind: 'library' })
+          })}
+        />
         <header className="view-head">
           <button type="button" className="icon-btn" aria-label="Back to Pages" onClick={() => setScreen({ kind: 'library' })}>
             <ArrowLeft size={16} />
@@ -293,21 +369,7 @@ export default function PagesView({
       className="pages-view"
       actions={
         <>
-          <label className="pages-search">
-            <Search size={14} />
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search Pages"
-              aria-label="Search Pages"
-              spellCheck={false}
-            />
-            {query !== '' && (
-              <button type="button" className="icon-btn" aria-label="Clear search" onClick={() => setQuery('')}>
-                <X size={13} />
-              </button>
-            )}
-          </label>
+          <SearchBox value={query} onChange={setQuery} label="Search Pages" clearable />
           <button
             type="button"
             className="queue-btn small ghost"
@@ -361,13 +423,13 @@ export default function PagesView({
         detailClassName="pages-main"
         detail={
           <>
-            {loading && <p className="pages-empty">Loading…</p>}
+            {loading && <p className="view-empty">Loading…</p>}
 
             {!loading && shown.length === 0 && (
-              <p className="pages-empty">
+              <p className="view-empty">
                 {hits !== null
                   ? `Nothing matches “${query.trim()}”.`
-                  : 'No Pages here yet.'}
+                  : 'No Pages yet. Describe one, and Orbis builds it.'}
               </p>
             )}
 
@@ -483,13 +545,32 @@ function PageFrame({
 }): React.JSX.Element {
   const [permissions, setPermissions] = useState<PagePermission[]>([])
   const [showing, setShowing] = useState(false)
+  /** Null until the answer is in, so “it asks for nothing” cannot be said about a question still in flight. */
+  const [asked, setAsked] = useState(false)
 
   useEffect(() => {
+    setAsked(false)
     void window.api.pagesPermissions(page.pageId).then((result) => {
       if ('error' in result) return
       setPermissions(result.permissions)
+      setAsked(true)
     })
   }, [page.pageId])
+
+  useSurface(
+    openPageSurface({
+      page: () => ({ pageId: page.pageId, slug: page.slug, title: page.title, url: page.url, categories: page.categories, limitations: page.limitations }),
+      // Throws until the answer is in. A control that could not be read says so; it does not answer “nothing”.
+      permissions: () => {
+        if (!asked) throw new Error('What this Page may reach has not come back yet.')
+        return permissions
+      },
+      showingPermissions: () => showing,
+      setShowingPermissions: setShowing,
+      back: onBack,
+      close: onClose
+    })
+  )
 
   return (
     <div className="view pages-view" role="region" aria-label={page.title}>
@@ -540,10 +621,10 @@ function PageFrame({
       )}
 
       <div className="pages-page">
-        {page.slug === 'unit-converter' && <UnitConverterPage pageId={page.pageId} onNotify={onNotify} />}
+        {page.slug === 'unit-converter' && <UnitConverterPage pageId={page.pageId} onNotify={onNotify} controllable />}
         {page.slug === 'equation-solver' && <EquationSolverPage pageId={page.pageId} onNotify={onNotify} />}
         {page.slug === 'calculus-lab' && <CalculusLabPage pageId={page.pageId} onNotify={onNotify} />}
-        {page.slug === 'function-plotter' && <FunctionPlotterPage pageId={page.pageId} onNotify={onNotify} />}
+        {page.slug === 'function-plotter' && <FunctionPlotterPage pageId={page.pageId} onNotify={onNotify} controllable />}
         {page.slug === 'statistics-lab' && <StatisticsLabPage pageId={page.pageId} onNotify={onNotify} />}
         {page.slug === 'data-explorer' && <DataExplorerPage pageId={page.pageId} onNotify={onNotify} />}
         {page.slug === 'measurement-lab' && <MeasurementLabPage pageId={page.pageId} onNotify={onNotify} />}
@@ -618,11 +699,19 @@ function LabPageFor(slug: string, pageId: string, onNotify: (m: string, k?: Noti
 export function UnitConverterPage({
   pageId,
   onNotify,
-  initial
+  initial,
+  controllable
 }: {
   pageId: string
   onNotify(m: string, k?: NoticeKind): void
   initial?: Readonly<Record<string, string>>
+  /**
+   * Whether this one is the Page in the frame, and so the one that declares itself.
+   *
+   * The same component also appears inside a chat message, and two screens claiming one path is a real fault -- so
+   * the frame says which copy is the Page and the chat copy says nothing.
+   */
+  controllable?: boolean
 }): React.JSX.Element {
   const [value, setValue] = useState(() => initial?.value ?? '36')
   const [from, setFrom] = useState(() => initial?.from ?? 'km/h')
@@ -662,6 +751,14 @@ export function UnitConverterPage({
     void run()
   }, [run])
 
+  /** Keeps this conversion in the Page's own saved work. The button and the declared action both call it. */
+  const saveConversion = useCallback(async (): Promise<boolean> => {
+    const result = await window.api.pagesProjectSave(pageId, null, `${value} ${from} to ${to}`, { value, from, to })
+    const saved = 'saved' in result && result.saved === true
+    onNotify(saved ? 'Saved' : 'Could not save', saved ? 'info' : 'error')
+    return saved
+  }, [pageId, value, from, to, onNotify])
+
   // Only the units that could actually work: offering a pressure for a length is offering an error.
   useEffect(() => {
     let cancelled = false
@@ -678,6 +775,23 @@ export function UnitConverterPage({
 
   return (
     <section className="page-pane" aria-label="Unit Converter">
+      {controllable && (
+        <DeclareSurface
+          declaration={unitConverterSurface({
+            amount: () => value,
+            setAmount: setValue,
+            from: () => from,
+            setFrom: setFrom,
+            to: () => to,
+            setTo: setTo,
+            convert: run,
+            answer: () => answer,
+            problem: () => problem,
+            options: () => options,
+            save: saveConversion
+          })}
+        />
+      )}
       <div className="page-row">
         <label className="page-field">
           <span>Amount</span>
@@ -722,11 +836,7 @@ export function UnitConverterPage({
       <button
         type="button"
         className="queue-btn small"
-        onClick={() =>
-          void window.api
-            .pagesProjectSave(pageId, null, `${value} ${from} to ${to}`, { value, from, to })
-            .then((result) => onNotify('saved' in result && result.saved ? 'Saved' : 'Could not save', 'saved' in result && result.saved ? 'info' : 'error'))
-        }
+        onClick={() => void saveConversion()}
       >
         Save this conversion
       </button>

@@ -25,6 +25,9 @@ const KINDS: { domain: ControlDomain; label: string; about: string }[] = [
     about: 'Read prices, screen markets, set alerts and place simulated paper trades. Never a real order — Orbis holds no exchange credentials'
   },
   { domain: 'experience', label: 'New tab and widgets', about: 'Change your widgets, theme and wallpaper' },
+  // Reaching inside Orbis's own screens: the controls a screen says it has, rather than clicking at it. Switching
+  // this off leaves Orion able to open a module and unable to work the panels inside it.
+  { domain: 'screens', label: 'Inside Orbis screens', about: 'Read and set the controls on Orbis’s own screens, and press what is on them' },
   // Locking things and reading what is protected. Switching this off does not weaken a lock: a locked tab is refused
   // whatever this says, because that refusal is not a capability and has no switch.
   { domain: 'security', label: 'Locking tabs and Orbis', about: 'Lock protected tabs, lock Orbis, and see what is protected' },

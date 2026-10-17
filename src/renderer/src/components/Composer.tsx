@@ -1,8 +1,9 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useChatPrediction } from '../lib/useChatPrediction'
 import { Check, FileText, Files, ListPlus, Mic, Paperclip, Pencil, Play, Plus, Send, Square, Upload, X } from 'lucide-react'
 import { MAX_QUEUED_MESSAGES } from '../lib/messageQueue'
-import { SLASH_COMMANDS } from '../lib/commands'
+import { SLASH_COMMANDS, slashCommandsFor } from '../lib/commands'
+import { featureState, type VisibilityChoice } from '../../../shared/featureVisibility'
 import type { ChatQueue, QueuedMessage } from '../lib/messageQueue'
 import type { Attachment } from '../../../shared/types'
 import { pictureSrc } from '../../../shared/attachments'
@@ -83,6 +84,16 @@ interface Props {
   onDraftStarted?(started: boolean): void
   /** Orbis's Visual effects setting; the animated placeholder follows it. */
   effects: boolean
+  /**
+   * Which features this person has showing, so the "/" menu offers nothing that is switched off.
+   *
+   * Handed in rather than read here. The window reads the choice once and every part of it asks the same copy;
+   * a second reader is how two halves of Orbis end up disagreeing about which features exist.
+   *
+   * Null while Orbis is still reading the file. That answers the essentials only, which is the safe direction: a
+   * menu briefly short is a menu, and a menu offering a screen that is switched off is a broken promise.
+   */
+  visibility: VisibilityChoice | null
   /** Messages waiting to be sent after the current reply. */
   queue?: ChatQueue
   onRemoveQueued(itemId: string): void
@@ -196,12 +207,21 @@ export default function Composer(props: Props): React.JSX.Element {
     return () => window.removeEventListener('orbis:compose', onCompose)
   }, [])
 
+  /**
+   * The commands this person really has, which is not every command Orbis has.
+   *
+   * Several slash commands are a door onto one of the optional screens, and a door onto a screen somebody has
+   * switched off is the clutter they were trying to get rid of -- in the one place they cannot avoid looking at,
+   * the box they type in. So the menu is built from `slashCommandsFor`, which asks `isVisible` about each one.
+   */
+  const commands = useMemo(() => slashCommandsFor(props.visibility), [props.visibility])
+
   // The "/" menu lists matching commands until the command is typed out and followed by a space.
   useEffect(() => {
     const typed = /^\/(\S*)$/.exec(text)
     if (typed) {
       const query = typed[1].toLowerCase()
-      const filtered = SLASH_COMMANDS.filter((cmd) => cmd.name.startsWith(query))
+      const filtered = commands.filter((cmd) => cmd.name.startsWith(query))
       setFilteredCommands(filtered)
       setCommandsOpen(filtered.length > 0)
       setSelectedCommandIndex(0)
@@ -209,7 +229,7 @@ export default function Composer(props: Props): React.JSX.Element {
       setCommandsOpen(false)
       setFilteredCommands([])
     }
-  }, [text])
+  }, [text, commands])
 
   // While Orbis is replying, sending adds the message to the queue instead.
   const canSend = text.trim() !== '' || attachments.length > 0
@@ -295,6 +315,23 @@ export default function Composer(props: Props): React.JSX.Element {
     const command = SLASH_COMMANDS.find((c) => c.name === commandName)
     if (!command) return
     setCommandsOpen(false)
+
+    /*
+     * Typed out in full, for a screen that is switched off.
+     *
+     * Looked up in the whole list rather than the shortened one on purpose. The command still exists and somebody
+     * has clearly just used it, so the worst thing to do is send "/chess" to Orion as a sentence, and the second
+     * worst is to do nothing at all. It says what is true, in `featureVisibility`'s own words -- which already
+     * include where the switch is -- and keeps what was typed so nothing is lost.
+     */
+    if (command.feature !== undefined) {
+      const state = featureState(command.feature, props.visibility)
+      if (!state.visible) {
+        props.onNotify(state.hiddenBecause ?? `${command.name} is not available right now.`, 'warn')
+        return
+      }
+    }
+
     if (command.args && !command.argsOptional && !args.trim()) {
       changeText(`/${command.name} `)
       requestAnimationFrame(() => textareaRef.current?.focus())

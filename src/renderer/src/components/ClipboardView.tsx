@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Check, Clipboard, Code2, Image as ImageIcon, Link2, Palette, Pause, Pin, Play, Settings2, ShieldCheck, Trash2, X } from 'lucide-react'
+import { Check, Clipboard, Code2, Image as ImageIcon, Link2, Palette, Pause, Pin, Play, ShieldCheck, Trash2, X } from 'lucide-react'
 import { SearchBox, Segmented, Surface } from '../ui'
 import type { ClipboardSettings, ClipItem, ClipKind } from '../../../shared/clipboardHistory'
 import { DEFAULT_CLIPBOARD_SETTINGS } from '../../../shared/clipboardHistory'
@@ -82,7 +82,7 @@ export default function ClipboardView({ onClose, onNotify }: { onClose(): void; 
             {paused ? <Play size={14} /> : <Pause size={14} />} {paused ? 'Paused' : 'Recording'}
           </button>
           <button type="button" className={`queue-btn${showSettings ? ' on' : ''}`} aria-expanded={showSettings} onClick={() => setShowSettings((v) => !v)}>
-            <Settings2 size={14} /> Settings
+            Settings
           </button>
           {confirmClear ? (
             <>

@@ -38,6 +38,7 @@ import OrionAnswer from './OrionAnswer'
 const WorkflowQuickPanel = lazy(() => import('./WorkflowQuickPanel'))
 import { useDismiss, useDropdownOpen } from '../lib/useDismiss'
 import { bool, failure, int, readResult, str, unverified, useControlRendered, useControlScope, verified, waitUntil } from '../lib/browserControl'
+import { addressParts } from '../../../shared/omnibox'
 
 interface Props {
   /** The Orbis browser's current page URL, or empty when no page is open. */
@@ -264,6 +265,7 @@ export default function UrlBar({
   const voice = useVoiceInput('url-bar', { inputId: tabKey })
   /** The shown text is the user's own (a draft), not the page's address. */
   const [editing, setEditing] = useState(false)
+  const [focused, setFocused] = useState(false)
   const [typed, setTyped] = useState('')
   const [open, setOpen] = useState(false)
   /** -1: nothing chosen with the arrows. */
@@ -580,6 +582,19 @@ export default function UrlBar({
   }
 
   const listOpen = open && items.length > 0
+
+  /*
+   * The bar at rest.
+   *
+   * While nobody is typing, the bar is a label saying where you are rather than a field: the site is drawn bright
+   * and centred, the path dim beside it, and `https://` is dropped. An `<input>` cannot do that -- it has one
+   * colour for all its text and one alignment -- so this is drawn over the top of it, and the moment the bar is
+   * focused it fades out and the real input, left-aligned and selectable, is what you see and type in.
+   *
+   * `resting` is null whenever the honest answer is "show exactly what was typed": a search, a half-finished word,
+   * a page that is not the web. Then nothing is drawn over the input at all.
+   */
+  const resting = !focused && !editing && !listOpen ? addressParts(shown) : null
   /*
    * Clicking anywhere else puts the list away.
    *
@@ -767,6 +782,7 @@ export default function UrlBar({
           <Globe size={14} aria-hidden="true" />
         )}
         <input
+          className={resting ? 'url-input is-resting' : 'url-input'}
           ref={inputRef}
           value={shown}
           placeholder="Search, type a URL, or Ctrl+Enter to ask Orion"
@@ -781,10 +797,14 @@ export default function UrlBar({
           autoComplete="off"
           // Focus alone (after opening a page, Ctrl+L/Ctrl+E, a new tab) only selects the text; the list opens when the
           // user clicks into the bar, types or presses the arrow keys.
-          onFocus={(e) => e.currentTarget.select()}
+          onFocus={(e) => {
+            setFocused(true)
+            e.currentTarget.select()
+          }}
           onMouseDown={() => setOpen(true)}
           onBlur={() => {
             // Leaving the bar (clicking a tab, the page, anywhere) keeps what was typed; only an empty bar goes back to the address.
+            setFocused(false)
             setOpen(false)
             setSelected(-1)
             if (!typed) setEditing(false)
@@ -835,6 +855,15 @@ export default function UrlBar({
             }
           }}
         />
+        {/* The bar at rest: the site bright and centred, everything else dim. Hidden from a screen reader, which
+            already has the input's own value and does not need it twice. */}
+        {resting && (
+          <span className="url-rest" aria-hidden="true">
+            {resting.before && <span className="url-rest-before">{resting.before}</span>}
+            <span className="url-rest-site">{resting.site}</span>
+            {resting.after && <span className="url-rest-after">{resting.after}</span>}
+          </span>
+        )}
         {onWebPage && !browserHidden && (
           <button
             type="button"

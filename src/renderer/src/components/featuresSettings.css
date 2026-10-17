@@ -1,0 +1,265 @@
+/*
+ * The Features screen in Settings: what is in your menu, and the switch for each one.
+ *
+ * `feat-` is this screen's own prefix and nothing else uses it (`src/shared/cssCollisions.test.ts` is what keeps
+ * that true). The widths are asked of the panel rather than the window: Settings' right-hand side is about 560px
+ * inside a dialog, so a window media query would be measuring the wrong thing entirely
+ * (`src/shared/screenWidth.test.ts`).
+ */
+
+.feat {
+  container-type: inline-size;
+}
+
+/* ---- the promise, and anything that went wrong ---- */
+
+.feat-promise,
+.feat-trouble {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0 0;
+  padding: 8px 12px;
+  border-radius: var(--radius-md, 10px);
+  border: 1px solid var(--line);
+  background: var(--pill-bg);
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.feat-promise > svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--green);
+}
+
+.feat-promise b {
+  color: var(--text);
+}
+
+.feat-trouble {
+  border-color: var(--danger-border, var(--line));
+  background: var(--danger-bg, var(--pill-bg));
+  color: var(--text);
+}
+
+.feat-trouble > svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--amber);
+}
+
+.feat-trouble p,
+.feat-trouble ul {
+  margin: 0 0 4px;
+}
+
+.feat-trouble p:last-child,
+.feat-trouble ul:last-child {
+  margin-bottom: 0;
+}
+
+.feat-trouble ul {
+  padding-left: 16px;
+}
+
+/* ---- searching and filtering ---- */
+
+.feat-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 0 8px;
+}
+
+.feat-bar .ui-search {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.feat-seg {
+  display: flex;
+  flex: none;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--radius-pill, 999px);
+  background: var(--pill-bg);
+}
+
+.feat-seg button {
+  padding: 4px 12px;
+  border-radius: var(--radius-pill, 999px);
+  color: var(--faint);
+  font-size: 13px;
+}
+
+.feat-seg button:hover {
+  color: var(--text);
+}
+
+.feat-seg button.on {
+  color: var(--text);
+  background: var(--hover-strong, var(--hover));
+}
+
+.feat-count {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 4px;
+  color: var(--faint);
+  font-size: 13px;
+}
+
+.feat-link {
+  color: var(--cyan);
+  font-size: 13px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.feat-link:disabled {
+  color: var(--faint);
+  text-decoration: none;
+}
+
+/* ---- the groups, and the rows in them ---- */
+
+.feat-group {
+  margin-top: 16px;
+}
+
+.feat-group h4 {
+  margin: 0;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.feat-group-blurb {
+  margin: 2px 0 8px;
+  color: var(--faint);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.feat-group ul {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.feat-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: var(--radius-md, 10px);
+  border: 1px solid var(--line);
+  background: var(--pill-bg);
+}
+
+.feat-row.is-broken {
+  border-color: var(--amber);
+}
+
+.feat-icon {
+  flex: none;
+  margin-top: 2px;
+  color: var(--faint);
+}
+
+.feat-row.is-fixed .feat-icon {
+  color: var(--faint);
+}
+
+.feat-what {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.feat-name {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.feat-hint,
+.feat-also {
+  color: var(--faint);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.feat-also {
+  margin-top: 3px;
+}
+
+.feat-row-trouble {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  margin-top: 4px;
+  color: var(--amber);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.feat-row-trouble > svg {
+  flex: none;
+  margin-top: 2px;
+}
+
+/* ---- the switch, and the ones that have none ---- */
+
+.feat-switch {
+  flex: none;
+  margin-top: 1px;
+}
+
+/* The shared switch says nothing about being unusable, and here it can be: while the saved choice has not been read,
+   while a save is in flight, and when a newer Orbis wrote the file. */
+.feat-switch input:disabled + span {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.feat-fixed {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: var(--radius-pill, 999px);
+  border: 1px solid var(--line);
+  color: var(--faint);
+  font-size: 11px;
+}
+
+/*
+ * Narrow panel: the switch drops under the name rather than squeezing it.
+ *
+ * Measured against the panel, not the window — Settings' right-hand side is a column inside a dialog, and a window
+ * query would stay at its wide layout while the column ran out of room.
+ */
+@container (max-width: 430px) {
+  .feat-bar {
+    flex-wrap: wrap;
+  }
+
+  .feat-row {
+    flex-wrap: wrap;
+  }
+
+  .feat-switch,
+  .feat-fixed {
+    margin-left: 24px;
+  }
+}

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, ArrowLeft, Check, GripVertical, Home, Plus, Trash2, X } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, Check, GripVertical, Home, Plus, Trash2 } from 'lucide-react'
 import type { NoticeKind } from '../lib/notices'
 import type { PageApplicationSummary, PageCard } from '../../../shared/types'
 
@@ -332,7 +332,7 @@ export function ApplicationsPanel({
             <Check size={12} /> {saving ? 'Saving…' : 'Save'}
           </button>
           <button type="button" className="page-chip" onClick={() => setDraft(null)}>
-            <X size={12} /> Cancel
+            Cancel
           </button>
         </div>
         <p className="page-note">

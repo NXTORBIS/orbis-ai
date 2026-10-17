@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AVATARS, DEFAULT_AVATAR, avatarStyle } from '../../../shared/avatars'
-import { Modal } from '../ui'
-import { FolderOpen, Gamepad2, Globe, Image as ImageIcon, Info, Lock, Mic, Palette, Search, Sparkles, User, X } from 'lucide-react'
+import { Modal, SearchBox } from '../ui'
+import { FolderOpen, Gamepad2, Globe, Image as ImageIcon, Info, LayoutGrid, Lock, Mic, Palette, Sparkles, User, X } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { DefaultBrowserState, Settings, SettingsUpdate, Theme } from '../../../shared/types'
 import { MODELS } from '../../../shared/models'
@@ -12,6 +12,11 @@ import {
   SETTINGS_SECTIONS,
   type SettingsSectionId
 } from '../../../shared/settingsSections'
+import { useSurface } from '../lib/surfaces'
+import type { FeatureVisibility } from '../lib/useFeatureVisibility'
+import { settingsSurface } from './settingsSurfaces'
+import { appearanceSurface } from './appearanceSurfaces'
+import { accountSurface, browsingSurface, orionSurface } from './settingsSectionSurfaces'
 
 const ImageGenSettings = lazy(() => import('./ImageGenSettings'))
 const OfflineGamesSettings = lazy(() => import('./OfflineGamesSettings'))
@@ -34,13 +39,32 @@ const MarketsSettings = lazy(() => import('./MarketsSettings'))
 const RecallSettings = lazy(() => import('./RecallSettings'))
 // Customize and Profiles were rows in the feature dropdown, which made how Orbis looks and who is using it into two
 // screens you navigated to rather than two settings. They are settings, so they are in Settings.
+// Which screens somebody sees at all. Its own screen because it is a list of twenty-five with a search over it.
+const FeaturesSettings = lazy(() => import('./FeaturesSettings'))
 const CustomizeView = lazy(() => import('./CustomizeView'))
 const ProfilesView = lazy(() => import('./ProfilesView'))
 
 interface Props {
   settings: Settings
+  /**
+   * Which features this person has showing: the window's one copy, handed in rather than read again here.
+   *
+   * Two `useFeatureVisibility` hooks would be two answers to one question, and switching something off in Settings
+   * would leave the sidebar still offering it until the next start. `App.tsx` holds it; this passes it to the
+   * Features section.
+   */
+  visibility: FeatureVisibility
   onUpdate(update: SettingsUpdate): Promise<Settings>
   onClose(): void
+  /**
+   * Which section is showing now, told to whoever opened Settings.
+   *
+   * So that the window and this dialog cannot disagree about where somebody is. The window holds "Settings is open,
+   * at this section"; this dialog holds which section is on screen; and before this they drifted apart the moment
+   * anybody clicked a different section -- which also meant Orbis could read one answer from the window and a
+   * different one from the dialog.
+   */
+  onSection?(section: SettingsSectionId): void
   /**
    * Which section to open at.
    *
@@ -61,9 +85,11 @@ const THEME_OPTIONS: [Theme, string][] = [
 
 type ProfileKey = 'assistantName' | 'userName' | 'userTitle'
 
+
 /** The registry names an icon; the window is what knows which drawing that is. */
 const ICONS: Record<string, LucideIcon> = {
   user: User,
+  layoutGrid: LayoutGrid,
   lock: Lock,
   sparkles: Sparkles,
   globe: Globe,
@@ -75,7 +101,7 @@ const ICONS: Record<string, LucideIcon> = {
   info: Info
 }
 
-export default function SettingsModal({ settings, onUpdate, onClose, section, onOpenFiles }: Props): React.JSX.Element {
+export default function SettingsModal({ settings, visibility, onUpdate, onClose, section, onSection, onOpenFiles }: Props): React.JSX.Element {
   // The keyboard stays in the dialog while it is open, and goes back where it was afterwards. That used to be a
   // `useFocusTrap(settingsRef, true)` written here; the dialog does it now, with the same hook and the same `true`,
   // so the panel no longer needs a ref of its own. Settings was the only screen that had this. Now all of them do.
@@ -83,6 +109,20 @@ export default function SettingsModal({ settings, onUpdate, onClose, section, on
   const [noticesOpen, setNoticesOpen] = useState(false)
   const [active, setActive] = useState<SettingsSectionId>(() => cleanSectionId(section))
   const [query, setQuery] = useState('')
+  /**
+   * Opening a section: one way in, so nothing can change it quietly.
+   *
+   * Five things move between sections -- the list, the search, the arrow keys, being asked to open somewhere, and
+   * Orbis -- and whoever opened Settings has to be told, or the window and this dialog end up holding two different
+   * answers to "which section is open".
+   */
+  const openSection = useCallback(
+    (id: SettingsSectionId): void => {
+      setActive(id)
+      onSection?.(id)
+    },
+    [onSection]
+  )
   const [profile, setProfile] = useState<Record<ProfileKey, string>>({
     assistantName: settings.assistantName,
     userName: settings.userName,
@@ -99,6 +139,31 @@ export default function SettingsModal({ settings, onUpdate, onClose, section, on
     }
     if (Object.keys(update).length) void onUpdate(update)
   }, [instructions, profile, settings, onUpdate])
+
+  /**
+   * One name, into its box and saved.
+   *
+   * What a person does here is two things -- type, then leave the box -- and `saveText` saves whatever is in state
+   * when it runs, so it cannot be used a moment after `setProfile` in the same handler: it would read the name from
+   * before. So this writes the box and sends that very text through the same settings service the blur does. One
+   * handler, used by the keyboard path on blur and by Orbis alike.
+   */
+  const setName = useCallback(
+    (key: ProfileKey, text: string): void => {
+      setProfile((p) => ({ ...p, [key]: text }))
+      if (text !== settings[key]) void onUpdate({ [key]: text })
+    },
+    [settings, onUpdate]
+  )
+
+  /** The same for the custom instructions: into the box, and kept. */
+  const setInstructionsNow = useCallback(
+    (text: string): void => {
+      setInstructions(text)
+      if (text !== settings.systemPrompt) void onUpdate({ systemPrompt: text })
+    },
+    [settings.systemPrompt, onUpdate]
+  )
 
   const close = useCallback((): void => {
     saveText()
@@ -128,10 +193,28 @@ export default function SettingsModal({ settings, onUpdate, onClose, section, on
 
   /** Asked to open somewhere specific after it is already open — the lock button while Settings is showing. */
   useEffect(() => {
-    if (section) setActive(cleanSectionId(section))
-  }, [section])
+    if (section) openSection(cleanSectionId(section))
+  }, [section, openSection])
 
   const shown = useMemo(() => findSections(query), [query])
+
+  /*
+   * Settings, as something Orbis can work rather than click at.
+   *
+   * What it offers is in `settingsSurfaces.ts`, as a function of these handlers -- the same ones the list and the
+   * search box call -- so that what Orbis can do here is exactly what somebody can do here, and so that it can be
+   * driven in a test without drawing a dialog.
+   */
+  useSurface(
+    settingsSurface({
+      section: () => active,
+      openSection: (id) => openSection(cleanSectionId(id)),
+      search: () => query,
+      setSearch: setQuery,
+      close,
+      licencesOpen: () => noticesOpen
+    })
+  )
 
   /**
    * A search narrows the list, and moves to the best match.
@@ -141,8 +224,8 @@ export default function SettingsModal({ settings, onUpdate, onClose, section, on
    * you where you are rather than throwing you back to the first section.
    */
   useEffect(() => {
-    if (query.trim() && shown.length > 0 && !shown.some((one) => one.id === active)) setActive(shown[0].id)
-  }, [query, shown, active])
+    if (query.trim() && shown.length > 0 && !shown.some((one) => one.id === active)) openSection(shown[0].id)
+  }, [query, shown, active, openSection])
 
   /**
    * Getting around without the mouse.
@@ -193,12 +276,12 @@ export default function SettingsModal({ settings, onUpdate, onClose, section, on
         // Stops at either end rather than wrapping round. Eight sections that loop are eight you can lose your
         // place in: pressing down twice too often puts you back at the top with no sign that anything happened.
         const next = Math.min(shown.length - 1, Math.max(0, (at < 0 ? 0 : at) + step))
-        setActive(shown[next].id)
+        openSection(shown[next].id)
       }
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [shown, active, noticesOpen])
+  }, [shown, active, noticesOpen, openSection])
 
   const profileField = (key: ProfileKey, label: string, placeholder: string): React.JSX.Element => (
     <label className="field">
@@ -234,20 +317,15 @@ export default function SettingsModal({ settings, onUpdate, onClose, section, on
         <div className="set-split">
           {/* Where everything is. Eight names instead of thirty-one blocks in one scroll. */}
           <nav className="set-nav" aria-label="Settings sections">
-            <div className="set-search">
-              <Search size={13} />
-              <input
-                ref={search}
-                type="search"
-                value={query}
-                placeholder="Search settings"
-                aria-label="Search settings"
-                // Said rather than left to be discovered. The arrows and the slash key work whether anybody reads
-                // this or not, but a shortcut nobody knows about is a shortcut nobody has.
-                title="Press / to search, up and down to move between sections"
-                onChange={(e) => setQuery(e.target.value)}
-              />
-            </div>
+            <SearchBox
+              value={query}
+              onChange={setQuery}
+              label="Search settings"
+              inputRef={search}
+              // Said rather than left to be discovered. The arrows and the slash key work whether anybody reads
+              // this or not, but a shortcut nobody knows about is a shortcut nobody has.
+              title="Press / to search, up and down to move between sections"
+            />
             {shown.length === 0 ? (
               <p className="set-none">Nothing matches “{query.trim()}”.</p>
             ) : (
@@ -260,7 +338,7 @@ export default function SettingsModal({ settings, onUpdate, onClose, section, on
                         type="button"
                         className={one.id === active ? 'is-on' : undefined}
                         aria-current={one.id === active ? 'page' : undefined}
-                        onClick={() => setActive(one.id)}
+                        onClick={() => openSection(one.id)}
                       >
                         <Icon size={15} />
                         <span>{one.label}</span>
@@ -277,6 +355,16 @@ export default function SettingsModal({ settings, onUpdate, onClose, section, on
               <h3>{current.label}</h3>
               <p>{current.blurb}</p>
             </header>
+
+            {/*
+              What each section lets Orbis do, registered while that section is open and gone the moment it is not.
+
+              Each one is its own little component because a hook cannot be called conditionally, and these screens
+              must only ever offer what is really in front of somebody. They draw nothing.
+            */}
+            {active === 'account' && <AccountSurface profile={profile} avatar={settings.userAvatar} setName={setName} onUpdate={onUpdate} />}
+            {active === 'orion' && <OrionSurface settings={settings} instructions={instructions} setInstructions={setInstructionsNow} onUpdate={onUpdate} />}
+            {active === 'browsing' && <BrowsingSurface settings={settings} onUpdate={onUpdate} />}
 
             {/* ---------------------------------------------------------------- Account */}
             {active === 'account' && (
@@ -332,6 +420,13 @@ export default function SettingsModal({ settings, onUpdate, onClose, section, on
             {active === 'account' && (
               <Suspense fallback={null}>
                 <ProfilesView embedded />
+              </Suspense>
+            )}
+
+            {/* ---------------------------------------------------------------- Features */}
+            {active === 'features' && (
+              <Suspense fallback={null}>
+                <FeaturesSettings visibility={visibility} />
               </Suspense>
             )}
 
@@ -538,6 +633,13 @@ export default function SettingsModal({ settings, onUpdate, onClose, section, on
                 Theme and Visual effects, together. They were nine items apart in the old scroll. */}
             {active === 'appearance' && (
               <>
+                {/*
+                  What this section lets Orbis do, registered while the section is open and gone when it is not.
+
+                  Its own little component because a hook cannot be called conditionally, and this screen must only
+                  offer what is really on it: the two controls below, and the Customize centre underneath them.
+                */}
+                <AppearanceSurface settings={settings} onUpdate={onUpdate} />
                 <section className="setting row">
                   <div className="setting-label">
                     <h3>Theme</h3>
@@ -651,6 +753,102 @@ export default function SettingsModal({ settings, onUpdate, onClose, section, on
       )}
     </>
   )
+}
+
+/**
+ * What the Account section lets Orbis do: the three names, and the world beside your name.
+ *
+ * The names are what is in the boxes -- the draft, which is what is on screen -- and `setName` is the one handler
+ * that writes a box and saves it. The world is saved the moment it is chosen, exactly as pressing it is.
+ */
+function AccountSurface({
+  profile,
+  avatar,
+  setName,
+  onUpdate
+}: {
+  profile: Record<ProfileKey, string>
+  avatar: string
+  setName(key: ProfileKey, text: string): void
+  onUpdate(update: SettingsUpdate): Promise<Settings>
+}): null {
+  useSurface(
+    accountSurface({
+      names: () => ({ assistantName: profile.assistantName, userName: profile.userName, userTitle: profile.userTitle }),
+      setName: (key, text) => setName(key, text),
+      avatar: () => avatar,
+      setAvatar: (id) => void onUpdate({ userAvatar: id })
+    })
+  )
+  return null
+}
+
+/** What the Orion section lets Orbis do: which model answers, and the standing instructions. */
+function OrionSurface({
+  settings,
+  instructions,
+  setInstructions,
+  onUpdate
+}: {
+  settings: Settings
+  instructions: string
+  setInstructions(text: string): void
+  onUpdate(update: SettingsUpdate): Promise<Settings>
+}): null {
+  useSurface(
+    orionSurface({
+      model: () => settings.defaultModel,
+      setModel: (id) => void onUpdate({ defaultModel: id }),
+      instructions: () => instructions,
+      setInstructions,
+      // The two this section keeps that nothing on screen chooses. Offered as readings, with the sentence saying so.
+      stored: () => ({ autoFallback: settings.autoFallback, reasoningEffort: settings.reasoningEffort })
+    })
+  )
+  return null
+}
+
+/** What the Browsing section lets Orbis do: its seven switches, through the same settings service they already use. */
+function BrowsingSurface({ settings, onUpdate }: { settings: Settings; onUpdate(update: SettingsUpdate): Promise<Settings> }): null {
+  useSurface(
+    browsingSurface({
+      stored: () => settings,
+      set: (key, on) => void onUpdate({ [key]: on })
+    })
+  )
+  return null
+}
+
+/**
+ * What the Appearance section lets Orbis do: light or dark, and whether Orbis moves.
+ *
+ * Draws nothing at all. It exists because `useSurface` is a hook and cannot be called only while one section is
+ * open — so the registration is a component instead, mounted with the section and unmounted with it. That is the
+ * point: Orbis is never offered a control that is not on the screen in front of somebody.
+ *
+ * Both controls go through `onUpdate`, which is the same settings service the two controls below call. There is no
+ * second place where the theme is kept.
+ */
+function AppearanceSurface({ settings, onUpdate }: { settings: Settings; onUpdate(update: SettingsUpdate): Promise<Settings> }): null {
+  useSurface(
+    appearanceSurface({
+      // The three the segmented control draws, from the same list it draws them from.
+      themes: THEME_OPTIONS.map(([id]) => id),
+      theme: () => settings.theme,
+      setTheme: (value) => void onUpdate({ theme: value as Theme }),
+      effects: () => settings.effects,
+      setEffects: (on) => void onUpdate({ effects: on }),
+      /*
+       * What Orbis is really painted as, asked of the window.
+       *
+       * Not worked out again here. "System" follows the computer and a theme that expects light surroundings turns
+       * on the light Orbis already has, so the answer is three settings deep -- and the window has already written
+       * it on the document. Reading what it wrote cannot disagree with what is on screen; a second calculation can.
+       */
+      showing: () => document.documentElement.dataset.theme ?? 'dark'
+    })
+  )
+  return null
 }
 
 export function Segmented<T extends string>({ value, options, onChange }: { value: T; options: [T, string][]; onChange(value: T): void }): React.JSX.Element {

@@ -12,7 +12,9 @@ import type { StoredPreset } from '../../../shared/presets'
 import type { PresetCategory } from '../../../shared/presets'
 import { applyPreset, BUILT_IN_PRESETS, copyOfPreset, MAX_PRESETS, presetFromConfig } from '../../../shared/presets'
 import { RulesEditor } from './RulesEditor'
-import { Button, Surface } from '../ui'
+import { Button, SearchBox, Surface } from '../ui'
+import { useSurface } from '../lib/surfaces'
+import { ACCENTS, customizeSurface } from './appearanceSurfaces'
 
 type Category = 'presets' | 'appearance' | 'themes' | 'newTab' | 'widgets' | 'notify' | 'accessibility' | 'performance' | 'privacy' | 'advanced'
 
@@ -61,7 +63,20 @@ const GRADIENTS: { name: string; source: string }[] = [
   { name: 'Morning', source: 'linear-gradient(180deg, #eef3f8 0%, #dbe5f0 60%, #c9d6e6 100%)' }
 ]
 
-const ACCENTS = ['', '#3fd8ff', '#3ee58a', '#ffbe4d', '#ff4d6d', '#a78bfa', '#f472b6', '#60a5fa']
+/**
+ * The parts of this screen that have a "Reset this" button, and what each is called.
+ *
+ * Written down once because the buttons below and what Orbis is offered have to be the same six: offering a seventh
+ * would be Orbis resetting something nobody can see a button for, and leaving one out would hide a real one.
+ */
+const RESETTABLE: { id: keyof ExperienceConfig; label: string }[] = [
+  { id: 'appearance', label: 'Appearance' },
+  { id: 'themes', label: 'Themes' },
+  { id: 'newTab', label: 'New tab' },
+  { id: 'accessibility', label: 'Accessibility' },
+  { id: 'performance', label: 'Performance' },
+  { id: 'privacy', label: 'Privacy' }
+]
 
 const when = (time: number): string => {
   const minutes = Math.round((Date.now() - time) / 60_000)
@@ -122,6 +137,19 @@ export default function CustomizeView({
   const [confirmRestore, setConfirmRestore] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
   const savedConfig = useRef(experience.config)
+  /**
+   * What this screen is showing, readable the moment it changes.
+   *
+   * `draft` is React state, so for one render after something is chosen it still holds the value from before. That is
+   * fine for drawing and wrong for being asked what really happened: Orbis checks an action the instant it has run,
+   * and `savedConfig` beside this is a ref for the very same reason. So every change to what is being shown goes
+   * through `show` below, and this is what the surface's getters read.
+   */
+  const shown = useRef(experience.config)
+  const show = (next: ExperienceConfig): void => {
+    shown.current = next
+    setDraft(next)
+  }
 
   // The draft follows what is saved until the user starts changing things. A change made elsewhere — by Orion, or in
   // another window — shows here too, so applying never quietly puts back an older draft over someone else's change.
@@ -131,7 +159,7 @@ export default function CustomizeView({
     if (experience.loading) return
     const wasSaved = savedConfig.current
     savedConfig.current = experience.saved
-    setDraft((current) => (isSame(current, wasSaved) ? experience.saved : { ...current, ...startPageOf(experience.saved) }))
+    show(isSame(shown.current, wasSaved) ? experience.saved : { ...shown.current, ...startPageOf(experience.saved) })
   }, [experience.loading, experience.saved])
 
   const loadHistory = async (): Promise<void> => {
@@ -170,10 +198,12 @@ export default function CustomizeView({
    */
   const change = (next: ExperienceConfig): void => {
     const kept = { ...next, ...startPageOf(savedConfig.current) }
-    setDraft(kept)
+    show(kept)
     experience.preview(kept)
   }
-  const changeAppearance = (patch: Partial<AppearanceConfig>): void => change({ ...draft, appearance: { ...draft.appearance, ...patch } })
+  // From what is being shown rather than from the last render's copy of it, so two changes in a row cannot lose the
+  // first: on screen the two are the same thing, and Orbis can set one of these and then another before a redraw.
+  const changeAppearance = (patch: Partial<AppearanceConfig>): void => change({ ...shown.current, appearance: { ...shown.current.appearance, ...patch } })
 
   const apply = async (): Promise<void> => {
     // The widgets as they are at this moment, in case the start page changed them after the last thing chosen here.
@@ -185,14 +215,14 @@ export default function CustomizeView({
   }
 
   const cancel = (): void => {
-    setDraft(savedConfig.current)
+    show(savedConfig.current)
     experience.cancelPreview()
   }
 
   const resetSection = async (section: keyof ExperienceConfig, label: string): Promise<void> => {
     const config = await window.api.resetExperienceSection(String(section))
     savedConfig.current = config
-    setDraft(config)
+    show(config)
     experience.preview(null)
     await loadHistory()
     say(`${label} is back to how Orbis has it`)
@@ -203,7 +233,7 @@ export default function CustomizeView({
     setConfirmRestore(false)
     const config = await window.api.getExperience()
     savedConfig.current = config
-    setDraft(config)
+    show(config)
     experience.preview(null)
     await loadHistory()
     say(wasDefault ? 'Orbis was already as it comes' : 'Orbis is back to how it comes')
@@ -230,7 +260,7 @@ export default function CustomizeView({
     if (!checked.ok) return say(checked.problems[0] ?? 'That file cannot be used', 'error')
     const { config } = await window.api.importExperience(raw, 'replace')
     savedConfig.current = config
-    setDraft(config)
+    show(config)
     experience.preview(null)
     await loadHistory()
     say(`Brought in: ${checked.summary.slice(0, 3).join(', ')}`)
@@ -243,6 +273,17 @@ export default function CustomizeView({
       <small>{format(value)}</small>
     </label>
   )
+
+  /**
+   * "Keep how Orbis looks now" as a preset of your own.
+   *
+   * One handler rather than the same three lines in the button and again in what Orbis is offered: a surface
+   * describes what is already here, so there must be one thing for it to describe.
+   */
+  const savePreset = (): void => {
+    const mine = presetFromConfig(shown.current, 'My preset')
+    change({ ...shown.current, presets: [...shown.current.presets, mine], activePresetId: mine.id })
+  }
 
   // ---- themes ----
   const useTheme = (themeId: string | null): void => change({ ...draft, themeId })
@@ -310,6 +351,35 @@ export default function CustomizeView({
       </label>
     )
   }
+
+  /*
+   * What this screen lets Orbis do, in `appearanceSurfaces.ts` as a function of these very handlers.
+   *
+   * Every control there sets the draft through `change` or `changeAppearance` -- the handlers the swatches, sliders
+   * and switches above call -- so what Orbis can do here is exactly what somebody can do here, including the part
+   * that matters most: a change is shown and is not kept until Apply. `apply` is checked by reading the stored
+   * configuration back, so a value the store would not accept is reported rather than claimed.
+   */
+  useSurface(
+    customizeSurface({
+      embedded,
+      categories: CATEGORIES.map((one) => ({ id: one.id, label: one.label })),
+      resettable: RESETTABLE.map((one) => ({ id: String(one.id), label: one.label })),
+      accents: ACCENTS,
+      category: () => category,
+      openCategory: (id) => setCategory(id as Category),
+      draft: () => shown.current,
+      saved: () => savedConfig.current,
+      change,
+      changeAppearance,
+      apply,
+      cancel,
+      resetSection: (id) => resetSection(id as keyof ExperienceConfig, RESETTABLE.find((one) => one.id === id)?.label ?? id),
+      savePreset,
+      // Asked of Orbis again, rather than read off this screen: it is how `apply` can say what was really kept.
+      check: () => window.api.getExperience()
+    })
+  )
 
   /*
     Apply and Cancel belong to the whole screen, so they are the header's actions both ways round -- hiding them
@@ -386,13 +456,7 @@ export default function CustomizeView({
                 Thirty-odd presets is too many to read as one wall, so the collection is narrowed by name, or by the
                 kind of thing you are after. Nothing is hidden -- "All" with an empty box is the whole collection.
               */}
-              <input
-                className="cz-search"
-                value={presetSearch}
-                placeholder="Search presets"
-                aria-label="Search presets"
-                onChange={(e) => setPresetSearch(e.target.value)}
-              />
+              <SearchBox value={presetSearch} onChange={setPresetSearch} label="Search presets" />
               <div className="cz-chips">
                 {(['all', 'Orbis', 'Calm', 'Dark', 'Light', 'Vivid', 'Work'] as const).map((group) => (
                   <Button
@@ -473,10 +537,7 @@ export default function CustomizeView({
                   size="small"
                   icon={<Plus size={12} />}
                   disabled={draft.presets.length >= MAX_PRESETS}
-                  onClick={() => {
-                    const mine = presetFromConfig(draft, 'My preset')
-                    change({ ...draft, presets: [...draft.presets, mine], activePresetId: mine.id })
-                  }}
+                  onClick={savePreset}
                 >
                   Save as preset
                 </Button>
@@ -830,7 +891,7 @@ export default function CustomizeView({
                       onClick={() =>
                         void window.api.restoreExperienceSnapshot(snapshot.id).then(async (config) => {
                           savedConfig.current = config
-                          setDraft(config)
+                          show(config)
                           experience.preview(null)
                           await loadHistory()
                           say('Went back to how it was')

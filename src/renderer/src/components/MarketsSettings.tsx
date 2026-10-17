@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Activity, Plus, RefreshCw, Search, Trash2, TrendingDown, TrendingUp } from 'lucide-react'
+import { Activity, Trash2, TrendingDown, TrendingUp } from 'lucide-react'
+import { SearchBox } from '../ui'
 import type { MarketsState } from '../../../main/markets/ipc'
 import type { Instrument } from '../../../shared/markets/instrument'
 import { TICKER_FIELDS, type TickerField, TICKER_SLOTS } from '../../../shared/markets/workspace'
@@ -241,22 +242,14 @@ export default function MarketsSettings(): React.JSX.Element {
                 disabled={busy}
                 onClick={() => void run(() => window.api.marketsRefresh())}
               >
-                <RefreshCw size={13} /> Refresh prices
+                Refresh prices
               </button>
             </div>
 
             {/* ---------------------------------------------------------------- adding one */}
             <div className="tl-block">
               <h4>Add an asset</h4>
-              <div className="mk-search">
-                <Search size={14} />
-                <input
-                  value={query}
-                  aria-label="Search for a market" placeholder="bitcoin, BTC, ETH…"
-                  maxLength={60}
-                  onChange={(e) => setQuery(e.target.value)}
-                />
-              </div>
+              <SearchBox value={query} onChange={setQuery} label="Search for a market" placeholder="bitcoin, BTC, ETH…" />
               {query.trim().length >= 2 && (
                 <ul className="mk-results">
                   {searching && <li className="mk-quiet">Searching…</li>}
@@ -279,7 +272,7 @@ export default function MarketsSettings(): React.JSX.Element {
                           void run(() => window.api.marketsTickerAdd(instrument.instrumentId))
                         }}
                       >
-                        <Plus size={12} /> Add
+                        Add
                       </button>
                     </li>
                   ))}

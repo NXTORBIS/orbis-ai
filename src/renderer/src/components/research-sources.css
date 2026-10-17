@@ -3,7 +3,7 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 4px 10px 4px 6px;
+  padding: 4px 8px 4px 4px;
   border: 1px solid var(--glass-border);
   border-radius: 999px;
   background: transparent;
@@ -21,8 +21,8 @@
   height: 18px;
   margin-left: -5px;
   border-radius: 50%;
-  border: 2px solid var(--bg-mid, #0b0d10);
-  background: var(--bg-mid, #0b0d10);
+  border: 2px solid var(--bg-mid, var(--surface));
+  background: var(--bg-mid, var(--surface));
   object-fit: cover;
 }
 .research-fav:first-child { margin-left: 0; }
@@ -33,13 +33,13 @@
   font-size: 10px;
   font-weight: 600;
   color: var(--faint);
-  background: color-mix(in srgb, var(--cyan) 14%, transparent);
+  background: var(--pill-bg);
 }
-.research-body { margin-top: 10px; }
+.research-body { margin-top: 8px; }
 .research-row-focused > button {
   border-color: var(--cyan);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--cyan) 35%, transparent);
-  border-radius: 8px;
+  border-radius: 6px;
 }
 /* The answer takes the whole column while its list sits beside it. */
 .research-body-wide { max-width: 100%; width: 100%; }
@@ -57,7 +57,7 @@
   margin-top: 0;
   border-top: 0;
   padding-top: 0;
-  padding-left: 14px;
+  padding-left: 12px;
   border-left: 1px solid var(--line-strong);
   position: sticky;
   top: 8px;

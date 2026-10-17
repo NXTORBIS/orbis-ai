@@ -1,8 +1,10 @@
 import { useFlip } from '../lib/motion'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Search } from 'lucide-react'
-import { searchCapabilities, unavailableBecause, type OrbisCapability, type Readiness } from '../../../shared/commandCenter'
-import { FEATURE_LIST, featureById } from '../lib/features'
+import { Power, Search } from 'lucide-react'
+import type { Readiness } from '../../../shared/commandCenter'
+import { paletteHits, reachableHits, type PaletteHit } from '../../../shared/featureMenu'
+import type { VisibilityChoice } from '../../../shared/featureVisibility'
+import { featureById } from '../lib/features'
 import type { FeatureId } from './Sidebar'
 import './commandPalette.css'
 
@@ -19,6 +21,17 @@ import './commandPalette.css'
  * differently are two products. What differs is only what a hit does -- in the window a hit opens a screen; in the
  * panel it opens a view -- and that difference is read off the capability rather than decided here.
  *
+ * ## And this is where a hidden screen is found
+ *
+ * People now choose which screens are in their menu, so most people's menus leave most of Orbis out. **This box is
+ * the one place that still finds all of it.** A screen that is switched off turns up by name, says that it is
+ * switched off, and goes on with one press of Enter. Somebody who did not pick Chess World at setup has no way to
+ * learn it exists from a menu that correctly leaves it out; typing "chess" is that way, and answering "Orbis has
+ * nothing like that" would be a lie.
+ *
+ * What the rows are and what each one does is worked out in `shared/featureMenu.ts`, which is plain code with a test
+ * beside it. This draws them.
+ *
  * A capability that cannot work right now is shown and said, never hidden: "Notes needs the browser running" is
  * something somebody can act on, and silence is not. It is not selectable, so Enter can never land on it.
  */
@@ -30,11 +43,15 @@ export interface CommandPaletteProps {
   onFeature(id: FeatureId): void
   /** Opens the browser, for a capability that lives there. */
   onBrowser(): void
+  /** Switches a screen on and opens it. Says what really happened, because a save can be refused. */
+  onTurnOn(id: FeatureId): void
   /** What Orbis can do right now, so nothing is offered that cannot be done. */
   ready: Readiness
+  /** Which screens this person has showing. Null until it has been read -- then only the essentials are offered. */
+  visibility: VisibilityChoice | null
 }
 
-export default function CommandPalette({ open, onClose, onFeature, onBrowser, ready }: CommandPaletteProps): React.JSX.Element | null {
+export default function CommandPalette({ open, onClose, onFeature, onBrowser, onTurnOn, ready, visibility }: CommandPaletteProps): React.JSX.Element | null {
   const [query, setQuery] = useState('')
   const [at, setAt] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -50,33 +67,14 @@ export default function CommandPalette({ open, onClose, onFeature, onBrowser, re
   }, [open])
 
   /**
-   * What the box offers before anything is typed.
+   * What the box offers.
    *
-   * The window's own screens, not the whole registry. An empty palette listing fifty-four things including eleven
-   * chrome:// deep links is a wall; the eleven screens this window has are a menu, and they are what somebody
-   * pressing Ctrl+K without a word in mind is almost always after.
+   * Nothing typed: this person's own menu. Something typed: everything Orbis has, switched-off screens among them.
    */
-  const hits = useMemo(() => {
-    if (query.trim() === '') {
-      return FEATURE_LIST.map((one) => ({
-        id: one.id,
-        name: one.label,
-        description: one.hint,
-        feature: one.id as FeatureId,
-        why: null as string | null
-      }))
-    }
-    return searchCapabilities(query, ready, 10).map(({ capability }: { capability: OrbisCapability }) => ({
-      id: capability.id,
-      name: capability.name,
-      description: capability.description,
-      feature: capability.app ? (capability.app as FeatureId) : null,
-      why: unavailableBecause(capability, ready)
-    }))
-  }, [query, ready])
+  const hits = useMemo(() => paletteHits(query, ready, visibility), [query, ready, visibility])
 
-  /** Only a hit that can actually be opened may be landed on. */
-  const reachable = useMemo(() => hits.filter((one) => one.why === null), [hits])
+  /** Only a hit that can actually be acted on may be landed on. */
+  const reachable = useMemo(() => reachableHits(hits), [hits])
 
   useEffect(() => {
     setAt((was) => (was >= reachable.length ? 0 : was))
@@ -87,10 +85,11 @@ export default function CommandPalette({ open, onClose, onFeature, onBrowser, re
 
   if (!open) return null
 
-  const take = (hit: (typeof hits)[number]): void => {
-    if (hit.why) return
+  const take = (hit: PaletteHit): void => {
+    if (hit.action === 'none') return
     onClose()
-    if (hit.feature) onFeature(hit.feature)
+    if (hit.action === 'turn-on' && hit.feature) onTurnOn(hit.feature)
+    else if (hit.feature) onFeature(hit.feature)
     else onBrowser()
   }
 
@@ -154,7 +153,7 @@ export default function CommandPalette({ open, onClose, onFeature, onBrowser, re
         </div>
 
         <div className="cp-list" id="cp-list" role="listbox" ref={listRef} aria-label="Results">
-          {hits.length === 0 && <p className="cp-none">Nothing matches “{query.trim()}”.</p>}
+          {hits.length === 0 && <p className="view-empty">Nothing matches “{query.trim()}”.</p>}
           {hits.map((hit) => {
             const index = reachable.indexOf(hit)
             const marked = index >= 0 && index === at
@@ -165,16 +164,26 @@ export default function CommandPalette({ open, onClose, onFeature, onBrowser, re
                 type="button"
                 role="option"
                 aria-selected={marked}
-                aria-disabled={hit.why !== null}
+                aria-disabled={hit.action === 'none'}
                 data-at={index >= 0 ? index : undefined}
                 data-flip={hit.id}
-                className={`cp-hit${marked ? ' at' : ''}${hit.why ? ' off' : ''}`}
+                className={`cp-hit${marked ? ' at' : ''}${hit.action === 'none' ? ' off' : ''}${hit.off ? ' cp-hidden' : ''}`}
                 onMouseEnter={() => index >= 0 && setAt(index)}
                 onClick={() => take(hit)}
               >
                 <span className="cp-hit-name">{hit.name}</span>
+                {/*
+                  A switched-off screen says so, in the row, with what Enter will do about it. Being off is not a
+                  refusal: it is the one thing in this box somebody can fix from where they are standing.
+                */}
+                {hit.off && hit.action === 'turn-on' && (
+                  <span className="cp-hit-tag">
+                    <Power size={11} aria-hidden="true" />
+                    Off
+                  </span>
+                )}
                 {/* The reason, in the row, where the thing it is about is. A capability that cannot work says so. */}
-                <span className="cp-hit-why">{hit.why ?? hit.description}</span>
+                <span className="cp-hit-why">{hit.detail}</span>
               </button>
             )
           })}

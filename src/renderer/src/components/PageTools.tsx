@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { Activity, AlertTriangle, Info, LineChart, Sigma, Table as TableIcon, Target } from 'lucide-react'
 import type { NoticeKind } from '../lib/notices'
 import type { PageComputeResult } from '../../../shared/types'
+import DeclareSurface from './DeclareSurface'
+import { functionPlotterSurface } from './pagesSurfaces'
 
 /**
  * The Pages backed by the newer engines: plotting, statistics, data, measurement, optimisation and simulation.
@@ -303,12 +305,20 @@ export function Plot({ series, height = 260 }: { series: Series[]; height?: numb
 export function FunctionPlotterPage({
   pageId,
   onNotify,
-  initial
+  initial,
+  controllable
 }: {
   pageId: string
   onNotify(m: string, k?: NoticeKind): void
   /** Starting values, when this was opened from a sentence rather than by hand. */
   initial?: Readonly<Record<string, string>>
+  /**
+   * Whether this one is the Page in the frame, and so the one that declares itself.
+   *
+   * The same component also appears inside a chat message, and two screens claiming one path is a real fault -- so
+   * the frame says which copy is the Page and the chat copy says nothing.
+   */
+  controllable?: boolean
 }): React.JSX.Element {
   const [mode, setMode] = useState<'function' | 'parametric' | 'polar'>(() => {
     const given = initial?.mode
@@ -319,7 +329,7 @@ export function FunctionPlotterPage({
   const [from, setFrom] = useState(() => initial?.from ?? '-20')
   const [to, setTo] = useState(() => initial?.to ?? '20')
 
-  const { result, problem, busy } = useEngine<{ series: Series; evaluations: number }>(
+  const { result, problem, busy, again } = useEngine<{ series: Series; evaluations: number }>(
     pageId,
     async (call) => {
       const low = Number(from)
@@ -347,6 +357,27 @@ export function FunctionPlotterPage({
 
   return (
     <section className="page-pane" aria-label="Function Plotter">
+      {controllable && (
+        <DeclareSurface
+          declaration={functionPlotterSurface({
+            kind: () => mode,
+            setKind: (id) => setMode(id as 'function' | 'parametric' | 'polar'),
+            expression: () => expression,
+            setExpression: setExpression,
+            second: () => second,
+            setSecond: setSecond,
+            from: () => from,
+            setFrom: setFrom,
+            to: () => to,
+            setTo: setTo,
+            again,
+            busy: () => busy,
+            // Null rather than zeros until something has been plotted: 0 evaluations reads as a curve that failed.
+            result: () => (result ? { evaluations: result.evaluations, pieces: (result.series?.segments ?? []).length } : null),
+            problem: () => problem
+          })}
+        />
+      )}
       <div className="page-chips" role="tablist" aria-label="What to plot">
         {(['function', 'parametric', 'polar'] as const).map((one) => (
           <button

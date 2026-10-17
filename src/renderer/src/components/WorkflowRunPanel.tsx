@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { AlertTriangle, Check, CircleStop, KeyRound, LoaderCircle, Pause, Play, RotateCcw, SkipForward, StepForward, X } from 'lucide-react'
+import { AlertTriangle, Check, CircleStop, KeyRound, LoaderCircle, Play, SkipForward, StepForward, X } from 'lucide-react'
 import { Modal } from '../ui'
 import type { RunControl, StepRecord } from '../../../shared/browserControl'
 import type { ActiveWorkflowRun, Workflow, WorkflowIssue, WorkflowRunSummary } from '../../../shared/workflows'
@@ -105,19 +105,19 @@ export function LiveRun({ run, records }: { run: ActiveWorkflowRun; records: Ste
           </button>
         ) : (
           <button type="button" className="queue-btn" onClick={() => control('pause')} disabled={s.status !== 'running'}>
-            <Pause size={11} /> Pause
+            Pause
           </button>
         )}
         {run.debug && (
           <button type="button" className="queue-btn" onClick={() => control('step')} disabled={!paused}>
-            <StepForward size={11} /> Step
+            Step
           </button>
         )}
         <button type="button" className="queue-btn" onClick={() => control('skip')} disabled={s.status !== 'running'} title="Skip the step that is running now">
-          <SkipForward size={11} /> Skip step
+          Skip step
         </button>
         <button type="button" className="queue-btn" onClick={() => control('restart-step')} disabled={s.status !== 'running'} title="Start the running step again">
-          <RotateCcw size={11} /> Restart step
+          Restart step
         </button>
         {s.iteration !== undefined && (
           <button type="button" className="queue-btn" onClick={() => control('stop-after-iteration')}>
@@ -125,7 +125,7 @@ export function LiveRun({ run, records }: { run: ActiveWorkflowRun; records: Ste
           </button>
         )}
         <button type="button" className="queue-btn danger" onClick={() => control('stop')}>
-          <CircleStop size={11} /> Stop
+          Stop
         </button>
       </div>
       <details className="wf-details" open={Object.keys(s.variables).length > 0 && Object.keys(s.variables).length < 12}>

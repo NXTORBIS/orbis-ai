@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
-import { AlertTriangle, BarChart3, Check, CalendarPlus, Cloud, Code2, Copy, FilePlus2, FolderOpen, FolderTree, History, Image as ImageIcon, LayoutTemplate, LineChart, Loader2, Mail, Music, Pencil, Play, Save, Search, Sparkles, Table2, FileText, Trash2, Video, Workflow, X } from 'lucide-react'
+import { AlertTriangle, BarChart3, Check, CalendarPlus, Cloud, Code2, Copy, FilePlus2, FolderOpen, FolderTree, History, Image as ImageIcon, LayoutTemplate, LineChart, Loader2, Mail, Music, Pencil, Play, Save, Sparkles, Table2, FileText, Trash2, Video, Workflow, X } from 'lucide-react'
 import type { NoticeKind } from '../lib/notices'
 import { CreateChange } from './CreateChange'
 import { CreateGrid } from './CreateGrid'
-import { Button, Surface } from '../ui'
+import { Button, SearchBox, Surface } from '../ui'
 import './create.css'
 
 /**
@@ -764,7 +764,7 @@ export default function CreateView({
               void ask()
             }}
           >
-            <label className="pages-search create-ask-input">
+            <label className="pages-ask create-ask-input">
               <Sparkles size={14} />
               <input
                 value={request}
@@ -917,10 +917,7 @@ export default function CreateView({
 
         <section className="create-library" aria-label="What you have made">
           <h3>Made so far</h3>
-          <label className="pages-search create-search">
-            <Search size={14} />
-            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Find by name, notes or what is in it" aria-label="Find an artifact" />
-          </label>
+          <SearchBox value={query} onChange={setQuery} label="Find an artifact" placeholder="Find by name, notes or what is in it" className="create-search" />
           {hits !== null ? (
             hits.length === 0 ? (
               <p className="view-empty">Nothing has “{query.trim()}” in its name, notes or content.</p>

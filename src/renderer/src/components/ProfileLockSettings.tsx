@@ -286,7 +286,7 @@ export default function ProfileLockSettings(): React.JSX.Element {
                 disabled={busy}
                 onClick={() => void window.api.profileLockNow()}
               >
-                <Lock size={14} /> Lock Orbis
+                Lock Orbis
               </button>
             </div>
           </>

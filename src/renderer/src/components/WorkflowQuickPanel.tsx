@@ -1,10 +1,11 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode, RefObject } from 'react'
 import { createPortal } from 'react-dom'
-import { CircleStop, Dot, LoaderCircle, Pause, Play, Plus, Radio, Search, Settings2, Square } from 'lucide-react'
+import { CircleStop, Dot, LoaderCircle, Pause, Play, Plus, Radio, Settings2, Square } from 'lucide-react'
 import type { ActiveWorkflowRun, Workflow, WorkflowLibrary } from '../../../shared/workflows'
 import type { NoticeKind } from '../lib/notices'
 import { RunDialog } from './WorkflowRunPanel'
+import { SearchBox } from '../ui'
 
 const EMPTY: WorkflowLibrary = { workflows: [], stats: {}, health: {}, nextRuns: {}, active: [], checkpoints: [], recording: { active: false, paused: false, steps: [], inputs: [], startedAt: 0 }, canRememberSecrets: false }
 
@@ -150,10 +151,13 @@ export default function WorkflowQuickPanel({
       style={place ? { left: place.left, top: place.top, maxHeight: place.maxHeight } : { visibility: 'hidden' }}
     >
       <header className="wf-quick-head">
-        <label className="wf-quick-search">
-          <Search size={13} aria-hidden="true" />
-          <input ref={searchRef} value={query} onChange={(e) => setQuery(e.target.value)} placeholder={host ? `Workflows for ${host}` : 'Search workflows'} aria-label="Search workflows" />
-        </label>
+        <SearchBox
+          value={query}
+          onChange={setQuery}
+          label="Search workflows"
+          placeholder={host ? `Workflows for ${host}` : 'Search workflows'}
+          inputRef={searchRef}
+        />
         <button type="button" className="wf-quick-icon" title="All workflows" aria-label="All workflows" onClick={() => (onClose(), onOpenLibrary())}>
           <Settings2 size={14} />
         </button>
@@ -206,7 +210,7 @@ export default function WorkflowQuickPanel({
             {busy === workflow.id ? <LoaderCircle size={13} className="spin" aria-hidden="true" /> : <Play size={13} aria-hidden="true" />}
           </button>
         ))}
-        {!runnable.length && <p className="wf-muted wf-quick-empty">{query ? 'No workflow matches.' : 'No workflows yet. Record one to get started.'}</p>}
+        {!runnable.length && <p className="view-empty">{query ? 'No workflow matches.' : 'No workflows yet. Record one, and it turns up here.'}</p>}
       </section>
 
       <footer className="wf-quick-foot">

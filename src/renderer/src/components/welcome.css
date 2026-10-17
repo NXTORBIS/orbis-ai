@@ -15,9 +15,14 @@
    * "chosen" tick in half, because the tick is meant to sit proud of the sphere's edge.
    */
   isolation: isolate;
-  color: #eef2f6;
+  color: var(--text);
   font-family: var(--font);
-  background: radial-gradient(ellipse 75% 65% at 50% 46%, #0a0d11 0%, #040506 55%, #000 100%);
+  /*
+   * The first thing anybody sees, and for a long time the only thing in Orbis that never asked the theme: three
+   * hand-written near-blacks, so the welcome screen, the password screen and the lock screen stayed dark however
+   * the window was set. They are the same three the rest of the window already vignettes with.
+   */
+  background: radial-gradient(ellipse 75% 65% at 50% 46%, var(--bg-center) 0%, var(--bg-mid) 55%, var(--bg-edge) 100%);
   user-select: none;
 }
 
@@ -31,9 +36,9 @@
   position: absolute;
   inset: -15%;
   background:
-    radial-gradient(circle at 50% 45%, rgba(63, 216, 255, 0.07), transparent 38%),
-    radial-gradient(circle at 28% 72%, rgba(110, 130, 255, 0.045), transparent 34%),
-    radial-gradient(circle at 74% 30%, rgba(63, 216, 255, 0.035), transparent 30%);
+    radial-gradient(circle at 50% 45%, var(--cyan-glow-soft), transparent 38%),
+    radial-gradient(circle at 28% 72%, var(--active), transparent 34%),
+    radial-gradient(circle at 74% 30%, var(--cyan-glow-soft), transparent 30%);
   opacity: 0;
   translate: calc(var(--px) * -14px) calc(var(--py) * -14px);
   transition: translate 1.2s var(--ease-out);
@@ -57,7 +62,12 @@
   right: 0;
   top: 50%;
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(120, 225, 255, 0.45) 35%, rgba(220, 252, 255, 0.75) 50%, rgba(120, 225, 255, 0.45) 65%, transparent);
+  /*
+   * A beam, so it is drawn in the beam colours rather than in white. On dark glass that is the old near-white
+   * flash; on light glass white over white is nothing at all, and `--beam-hot` is the saturated accent instead --
+   * a line of light has to be the thing the background is not.
+   */
+  background: linear-gradient(90deg, transparent, var(--cyan-dim) 35%, var(--beam-hot) 50%, var(--cyan-dim) 65%, transparent);
   opacity: 0;
   transform: scaleX(0);
   animation: welcome-horizon 2.4s var(--ease-out) 0.5s forwards;
@@ -135,9 +145,13 @@
   overflow: visible;
 }
 
+/*
+ * The three orbits keep their exact relative strengths -- 34, 20 and 16 per cent -- but of the theme's accent
+ * rather than of one hand-picked pale blue, so the same three rings read on white as they do on black.
+ */
 .orbit {
   fill: none;
-  stroke: rgba(140, 222, 255, 0.34);
+  stroke: color-mix(in srgb, var(--cyan) 34%, transparent);
   stroke-width: 0.8;
   stroke-dasharray: 1 1;
   stroke-dashoffset: 1;
@@ -150,12 +164,12 @@
 }
 
 .orbit-2 {
-  stroke: rgba(140, 222, 255, 0.2);
+  stroke: color-mix(in srgb, var(--cyan) 20%, transparent);
   animation-delay: 1s;
 }
 
 .orbit-3 {
-  stroke: rgba(170, 205, 255, 0.16);
+  stroke: color-mix(in srgb, var(--cyan) 16%, transparent);
   animation-delay: 1.15s;
 }
 
@@ -178,7 +192,7 @@
 }
 
 .orbit-node {
-  fill: #dcfcff;
+  fill: var(--beam-hot);
   opacity: 0;
   animation: welcome-fade-in 1s ease 1.7s forwards;
 }
@@ -190,7 +204,7 @@
   width: 46%;
   aspect-ratio: 1;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(120, 230, 255, 0.16), transparent 65%);
+  background: radial-gradient(circle, color-mix(in srgb, var(--cyan) 16%, transparent), transparent 65%);
   opacity: 0;
   transform: translate(-50%, -50%) scale(0.6);
   pointer-events: none;
@@ -205,17 +219,26 @@
   left: 50%;
   top: 50%;
   width: 20%;
+  filter: var(--logo-filter);
   opacity: 0;
   transform: translate(-50%, -50%) scale(0.6);
   pointer-events: none;
   animation: welcome-ring 1.7s var(--ease-out) 1.1s forwards;
 }
 
+/*
+ * The wordmark is a picture, and the picture is near-white: ORBIS in white letterforms with a cyan ring through
+ * the O. Recolouring it is not an option -- it is the logo -- but on a white page a white logo is a blank space,
+ * which is what the welcome screen showed. `--logo-filter` is `none` on dark glass and flips the lightness on
+ * light glass while turning the hue back, so the letterforms go near-black and the ring stays in its own blue
+ * family. The artwork is untouched; what changes is how the theme has to treat it.
+ */
 .welcome-wordmark {
   position: absolute;
   left: 50%;
   top: 50%;
   width: 74%;
+  filter: var(--logo-filter);
   opacity: 0;
   transform: translate(-50%, -50%);
   pointer-events: none;
@@ -281,8 +304,10 @@
   font-weight: 700;
   line-height: 1.3;
   letter-spacing: 0.01em;
-  color: #f4f7fa;
-  background: linear-gradient(135deg, #f7f9fb 0%, #b9c9d5 100%);
+  /* The gradient is what paints the heading; `color` only shows if background-clip fails. Both are themed, or the
+     heading is a white-on-white gradient with a white fallback behind it. */
+  color: var(--greeting);
+  background: linear-gradient(135deg, var(--greeting) 0%, var(--muted) 100%);
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -297,19 +322,19 @@
   display: inline-block;
   width: 2px;
   height: 0.95em;
-  margin-left: 5px;
+  margin-left: 4px;
   vertical-align: -0.1em;
-  background: #9eeaff;
-  box-shadow: 0 0 8px rgba(63, 216, 255, 0.55);
+  background: var(--cyan);
+  box-shadow: 0 0 8px var(--cyan-dim);
   animation: blink 1s steps(1) infinite;
 }
 
 .welcome-sub {
   display: block;
-  margin: 12px 0 26px;
+  margin: 12px 0 24px;
   font-size: 15px;
   line-height: 1.5;
-  color: #aab4be;
+  color: var(--muted);
   opacity: 0;
   transform: translateY(6px);
   transition:
@@ -325,12 +350,14 @@
 .welcome-field {
   position: relative;
   width: 100%;
-  border: 1px solid rgba(63, 216, 255, 0.14);
-  border-radius: 18px;
-  background: linear-gradient(180deg, rgba(16, 20, 27, 0.8), rgba(6, 8, 11, 0.88));
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  /* The same surface the composer uses: it is the same thing -- one large text field that the whole screen is
+     built around -- and it was the dark slab left sitting in the middle of the light theme. */
+  background: var(--composer-bg);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.04),
-    0 10px 30px rgba(0, 0, 0, 0.35);
+    inset 0 1px 0 var(--rim-light),
+    0 10px 30px var(--shadow-color);
   transition:
     border-color 0.35s ease,
     box-shadow 0.45s ease;
@@ -345,7 +372,7 @@
   right: 18%;
   bottom: -1px;
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(160, 236, 255, 0.9), transparent);
+  background: linear-gradient(90deg, transparent, var(--cyan), transparent);
   opacity: 0;
   transform: scaleX(0.2);
   transition:
@@ -354,11 +381,11 @@
 }
 
 .welcome-field:focus-within {
-  border-color: rgba(63, 216, 255, 0.42);
+  border-color: var(--cyan-dim);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.06),
-    0 0 0 4px rgba(63, 216, 255, 0.07),
-    0 0 32px rgba(63, 216, 255, 0.12);
+    inset 0 1px 0 var(--rim-light),
+    0 0 0 4px color-mix(in srgb, var(--cyan) 10%, transparent),
+    0 0 32px var(--cyan-glow-soft);
 }
 
 .welcome-field:focus-within::after {
@@ -369,11 +396,11 @@
 .welcome-input {
   display: block;
   width: 100%;
-  padding: 16px 22px;
+  padding: 16px 20px;
   border: 0;
   outline: 0;
   background: transparent;
-  color: #f3f6f9;
+  color: var(--composer-text);
   font-family: var(--font);
   font-size: 18px;
   font-weight: 500;
@@ -383,19 +410,20 @@
 }
 
 .welcome-input::placeholder {
-  color: rgba(196, 206, 218, 0.45);
+  color: var(--composer-placeholder);
 }
 
 .welcome-continue {
-  margin-top: 18px;
+  margin-top: 16px;
   min-width: 164px;
-  padding: 11px 26px;
-  border: 1px solid rgba(63, 216, 255, 0.4);
+  padding: 12px 24px;
+  border: 1px solid var(--cyan-dim);
   border-radius: 999px;
-  background: rgba(63, 216, 255, 0.1);
-  color: #dff8ff;
+  /* A tint of the accent, not a solid fill, so the label is the accent at full strength rather than `--on-accent`. */
+  background: var(--cyan-fill);
+  color: var(--cyan);
   font-family: var(--font);
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   letter-spacing: 0.04em;
   cursor: pointer;
@@ -409,15 +437,15 @@
 }
 
 .welcome-continue:hover:not(:disabled) {
-  border-color: rgba(63, 216, 255, 0.7);
-  background: rgba(63, 216, 255, 0.18);
-  box-shadow: 0 6px 24px rgba(63, 216, 255, 0.18);
+  border-color: var(--cyan);
+  background: color-mix(in srgb, var(--cyan) 18%, transparent);
+  box-shadow: 0 6px 24px var(--cyan-glow-soft);
   transform: translateY(-1px);
 }
 
 .welcome-continue:active:not(:disabled) {
   transform: translateY(0) scale(0.98);
-  box-shadow: 0 2px 10px rgba(63, 216, 255, 0.14);
+  box-shadow: 0 2px 10px var(--cyan-glow-soft);
 }
 
 .welcome-continue:disabled {
@@ -432,12 +460,12 @@
 }
 
 .welcome-secondary {
-  margin-top: 10px;
-  padding: 8px 14px;
+  margin-top: 8px;
+  padding: 8px 12px;
   border: 0;
   border-radius: 999px;
   background: none;
-  color: #9aa6b1;
+  color: var(--muted);
   font-family: var(--font);
   font-size: 13px;
   cursor: pointer;
@@ -447,8 +475,8 @@
 }
 
 .welcome-secondary:hover {
-  color: #dbe4ea;
-  background: rgba(255, 255, 255, 0.05);
+  color: var(--text);
+  background: var(--hover);
 }
 
 .welcome-hint,
@@ -457,11 +485,11 @@
   font-size: 11px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: #8b96a0;
+  color: var(--faint);
 }
 
 .welcome-hint {
-  margin: 14px 0 0;
+  margin: 12px 0 0;
   opacity: 0;
   transition: opacity 0.4s ease;
 }
@@ -609,20 +637,32 @@
   }
 }
 
+/*
+ * `--logo-filter` is repeated inside both of these, and it has to be.
+ *
+ * An animation outranks an ordinary declaration, and `filter` is a single property: the moment one of these
+ * keyframes names a blur or a brightness it replaces the whole filter, so `filter: var(--logo-filter)` on the
+ * element would be thrown away for the entire animation -- and both run `forwards`, so it would stay thrown away.
+ * The light theme's wordmark would flash dark for one frame and then go white-on-white again, which is the kind
+ * of fault that looks like the image failed to load.
+ *
+ * It is also why the dark value is `brightness(1)` rather than `none`: `none` cannot be composed with another
+ * filter function, so `var(--logo-filter) blur(8px)` would be invalid CSS in the dark theme and drop the blur.
+ */
 @keyframes welcome-ring {
   0% {
     opacity: 0;
-    filter: blur(8px);
+    filter: var(--logo-filter) blur(8px);
     transform: translate(-50%, -50%) scale(0.6) rotate(-40deg);
   }
   45% {
     opacity: 1;
-    filter: blur(0);
+    filter: var(--logo-filter) blur(0);
     transform: translate(-50%, -50%) scale(1) rotate(0deg);
   }
   100% {
     opacity: 0;
-    filter: blur(3px);
+    filter: var(--logo-filter) blur(3px);
     transform: translate(-50%, -50%) scale(1.5);
   }
 }
@@ -630,13 +670,13 @@
 @keyframes welcome-wordmark {
   from {
     opacity: 0;
-    filter: brightness(1.6);
+    filter: var(--logo-filter) brightness(1.6);
     -webkit-mask-size: 0% 100%;
     mask-size: 0% 100%;
   }
   to {
     opacity: 1;
-    filter: brightness(1);
+    filter: var(--logo-filter) brightness(1);
     -webkit-mask-size: 150% 100%;
     mask-size: 150% 100%;
   }
@@ -705,7 +745,7 @@
 
 .welcome-secure {
   width: 100%;
-  margin-top: 22px;
+  margin-top: 20px;
   /* Collapsed to nothing until there is a name, so the button does not sit in the middle of the screen waiting. */
   max-height: 0;
   opacity: 0;
@@ -728,7 +768,7 @@
   margin: 0 0 8px;
   font-size: 13px;
   letter-spacing: 0.02em;
-  color: #aab4be;
+  color: var(--muted);
 }
 
 .welcome-secure .welcome-field {
@@ -737,7 +777,7 @@
 }
 
 .welcome-secure .welcome-field + .welcome-label {
-  margin-top: 18px;
+  margin-top: 16px;
 }
 
 /* The field with the reveal button in it: the input takes what is left, so the button never overlaps the text. */
@@ -755,9 +795,9 @@
   height: 36px;
   transform: translateY(-50%);
   border: 0;
-  border-radius: 12px;
+  border-radius: 10px;
   background: transparent;
-  color: #8b96a2;
+  color: var(--composer-icon);
   cursor: pointer;
   transition:
     color 0.25s ease,
@@ -765,12 +805,12 @@
 }
 
 .welcome-reveal:hover {
-  color: #d6e6f2;
-  background: rgba(63, 216, 255, 0.1);
+  color: var(--text);
+  background: var(--cyan-fill);
 }
 
 .welcome-reveal:focus-visible {
-  outline: 2px solid rgba(160, 236, 255, 0.8);
+  outline: 2px solid var(--cyan);
   outline-offset: 2px;
 }
 
@@ -783,9 +823,10 @@
 .welcome-meter {
   position: relative;
   height: 3px;
-  margin: 10px 0 8px;
+  margin: 8px 0 8px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.07);
+  /* The track has to be visible as a track, or there is nothing for the fill to be a fraction of. */
+  background: var(--line-strong);
   overflow: hidden;
 }
 
@@ -794,7 +835,7 @@
   height: 100%;
   width: 0;
   border-radius: inherit;
-  background: #6e727b;
+  background: var(--faint);
   transition:
     width 0.35s var(--ease-out),
     background 0.35s ease;
@@ -804,37 +845,39 @@
   width: 0 !important;
 }
 
+/* The verdict colours are the window's own danger/caution/success/accent, not four hand-picked tints: a red that
+   means weak has to go on meaning weak when the theme turns, and on white these four had almost no contrast. */
 .welcome-meter[data-strength='weak'] > span {
-  background: #ff6b6b;
+  background: var(--red);
 }
 
 .welcome-meter[data-strength='fair'] > span {
-  background: #ffbe4d;
+  background: var(--amber);
 }
 
 .welcome-meter[data-strength='good'] > span {
-  background: #4fd1a5;
+  background: var(--green);
 }
 
 .welcome-meter[data-strength='strong'] > span {
-  background: #3fd8ff;
+  background: var(--cyan);
 }
 
 .welcome-note {
   min-height: 18px;
   margin: 0;
-  font-size: 12.5px;
+  font-size: 13px;
   line-height: 1.45;
-  color: #8b96a2;
+  color: var(--muted);
 }
 
 .welcome-note[role='alert'] {
-  color: #ff8a8a;
+  color: var(--danger);
 }
 
 .welcome-note.is-quiet {
   margin-top: 16px;
-  color: #6e727b;
+  color: var(--faint);
 }
 
 /* Nothing here animates for somebody who asked not to be moved; it simply appears. */
@@ -859,7 +902,7 @@
   margin: -18px 0 24px;
   font-size: 13px;
   line-height: 1.5;
-  color: #7c8794;
+  color: var(--faint);
   opacity: 0;
   transform: translateY(6px);
   transition:
@@ -899,16 +942,16 @@
 }
 
 .welcome-panel.is-locking .welcome-note.is-quiet {
-  margin-top: 6px;
-  font-size: 12px;
+  margin-top: 4px;
+  font-size: 13px;
 }
 
 .welcome-panel.is-locking .welcome-continue {
-  margin-top: 14px;
+  margin-top: 12px;
 }
 
 .welcome-panel.is-locking .welcome-secondary {
-  margin-top: 6px;
+  margin-top: 4px;
 }
 
 /* ================================================================ the account's world
@@ -1425,7 +1468,7 @@
     from calc(var(--av-turn) + var(--av-sweep)),
     var(--av-rim),
     color-mix(in srgb, var(--av-rim) 30%, transparent) 30%,
-    rgba(255, 255, 255, 0.05) 55%,
+    color-mix(in srgb, var(--text) 5%, transparent) 55%,
     color-mix(in srgb, var(--av-rim) 26%, transparent) 78%,
     var(--av-rim)
   );
@@ -1443,7 +1486,7 @@
 
 .welcome-field.has-face .welcome-input {
   /* Room for the world, which sits over the padding rather than pushing the text box around. */
-  padding-left: 62px;
+  padding-left: 60px;
 }
 
 .welcome-face {
@@ -1453,7 +1496,7 @@
   width: 36px;
   height: 36px;
   transform: translateY(-50%);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 4px 12px var(--shadow-color);
   /* The colours cross-fade as the name changes them, so a keystroke turns the world rather than swapping it. */
   transition:
     background 0.5s ease,
@@ -1465,7 +1508,7 @@
 
 .welcome-faces {
   width: 100%;
-  margin-top: 18px;
+  margin-top: 16px;
   max-height: 0;
   opacity: 0;
   overflow: hidden;
@@ -1498,8 +1541,8 @@
   display: grid;
   grid-template-columns: repeat(6, 1fr);
   justify-items: center;
-  gap: 14px 8px;
-  padding: 13px 6px 2px;
+  gap: 12px 8px;
+  padding: 12px 4px 2px;
 }
 
 /* The world's name, in one place under the grid rather than twelve labels competing with twelve pictures. It keeps
@@ -1508,10 +1551,10 @@
   min-height: 1.35em;
   margin: 12px 0 0;
   text-align: center;
-  font-size: 12px;
+  font-size: 13px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: #aab4be;
+  color: var(--muted);
   transition: color 0.3s ease;
 }
 
@@ -1519,7 +1562,7 @@
   width: 56px;
   height: 56px;
   cursor: pointer;
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 6px 16px var(--shadow-color);
   transition:
     transform 0.3s var(--ease-out),
     box-shadow 0.3s ease,
@@ -1596,7 +1639,7 @@
 .welcome-face-pick:focus-visible {
   transform: translateY(-5px) scale(1.09);
   opacity: 1;
-  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 12px 24px var(--shadow-color);
   --av-bloom: 1;
   /*
    * Backwards, and only 20 degrees. On a 56px ring that is about 12px of travel -- plainly a glance of light, and
@@ -1673,7 +1716,7 @@
   opacity: 1;
   transform: translateY(-5px) scale(1.12);
   box-shadow:
-    0 12px 26px rgba(0, 0, 0, 0.5),
+    0 12px 26px var(--shadow-color),
     0 0 0 2px var(--av-rim),
     0 0 20px color-mix(in srgb, var(--av-rim) 45%, transparent);
 }
@@ -1694,9 +1737,11 @@
   height: 16px;
   border-radius: 50%;
   background-color: var(--av-rim);
+  /* The 2px ring is the page showing through, which is what separates the tick from the sphere behind it. It was
+     the old background's own near-black, so on a light page the tick sat in a dark halo. */
   box-shadow:
-    0 1px 4px rgba(0, 0, 0, 0.5),
-    0 0 0 2px #06080b;
+    0 1px 4px var(--shadow-color),
+    0 0 0 2px var(--bg);
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 8.4l2.6 2.6L12 5.6' fill='none' stroke='%23000' stroke-opacity='.8' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   background-size: 100% 100%;
   background-repeat: no-repeat;
@@ -1754,4 +1799,227 @@
     transition: none;
     --av-sweep: 0deg;
   }
+}
+
+/* ------------------------------------------------------------------ choosing what you want to see
+ *
+ * The third step of setting up, after the name and the password.
+ *
+ * Built out of what the two steps before it already established -- the same glass field surface, the same cyan rim
+ * on focus, the same `welcome-rise` entrance, the same quiet grey for anything that is not being asked -- so it
+ * reads as the third screen of one sequence rather than a settings page that turned up during onboarding. Nothing
+ * new was invented to hold a tick box.
+ *
+ * The stage is wider here and only here: sixteen cards will not fit in the 440px column the single question needed,
+ * and widening it for every step would move the name field somebody has already used.
+ */
+
+.welcome.is-choosing .welcome-stage,
+.welcome.is-choosingSave .welcome-stage {
+  width: min(840px, 100%);
+}
+
+.welcome-panel.is-choosing {
+  /* The cards measure themselves against this panel, never the window: the panel is the thing that runs out of
+     room, and on a narrow window it is far narrower than the window is. */
+  container-type: inline-size;
+  width: 100%;
+}
+
+.welcome-panel.is-choosing .welcome-sub {
+  margin-bottom: 16px;
+}
+
+.welcome-choose {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  /* Four headings and sixteen cards are taller than a laptop screen, so this one part scrolls and the heading,
+     the count and the two buttons stay where they are. Measured in viewport units because what is running out is
+     the window's height, not any box's. */
+  max-height: min(46dvh, 430px);
+  overflow-y: auto;
+  padding: 2px 2px 4px;
+  text-align: left;
+  /* The list fades out where it is cut rather than ending in a hard line, which is the only hint needed that there
+     is more below it. */
+  mask-image: linear-gradient(to bottom, transparent 0, #000 10px, #000 calc(100% - 18px), transparent 100%);
+}
+
+.welcome-choose-group {
+  animation: welcome-rise 0.7s var(--ease-out) calc(0.18s + var(--at, 0) * 0.07s) both;
+}
+
+.welcome-choose-heading {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text);
+}
+
+.welcome-choose-blurb {
+  margin: 4px 0 8px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--faint);
+}
+
+.welcome-choose-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(172px, 1fr));
+  gap: 8px;
+}
+
+.welcome-choose-card {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-areas:
+    'icon name'
+    'line line'
+    'warn warn';
+  align-items: center;
+  gap: 2px 8px;
+  padding: 12px 32px 12px 12px;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  background: var(--composer-bg);
+  box-shadow: inset 0 1px 0 var(--rim-light);
+  color: var(--text);
+  font-family: var(--font);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 0.25s ease,
+    background 0.25s ease,
+    box-shadow 0.3s ease,
+    transform 0.15s ease;
+}
+
+.welcome-choose-card:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    inset 0 1px 0 var(--rim-light),
+    0 8px 22px var(--shadow-color);
+}
+
+.welcome-choose-card:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+
+.welcome-choose-card.is-on {
+  border-color: var(--cyan-dim);
+  background: var(--cyan-fill);
+  box-shadow:
+    inset 0 1px 0 var(--rim-light),
+    0 0 24px var(--cyan-glow-soft);
+}
+
+.welcome-choose-icon {
+  grid-area: icon;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 10px;
+  background: var(--hover);
+  color: var(--muted);
+  transition:
+    color 0.25s ease,
+    background 0.25s ease;
+}
+
+.welcome-choose-card.is-on .welcome-choose-icon {
+  background: color-mix(in srgb, var(--cyan) 16%, transparent);
+  color: var(--cyan);
+}
+
+.welcome-choose-name {
+  grid-area: name;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.welcome-choose-line {
+  grid-area: line;
+  margin-top: 4px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+/* The tick is the only thing that says "chosen" besides the tint, because a tint on its own is nothing to somebody
+   who cannot see this one. */
+.welcome-choose-tick {
+  position: absolute;
+  top: 11px;
+  right: 11px;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  color: transparent;
+  transition:
+    border-color 0.25s ease,
+    background 0.25s ease,
+    color 0.25s ease;
+}
+
+.welcome-choose-card.is-on .welcome-choose-tick {
+  border-color: var(--cyan);
+  background: var(--cyan);
+  color: var(--on-accent);
+}
+
+/* Chosen, and it still would not appear. Said on the card, in the colour Orbis uses for "mind this". */
+.welcome-choose-warn {
+  grid-area: warn;
+  margin-top: 8px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--amber);
+}
+
+/* One card per row once the panel itself is narrow: two 172px cards plus the gap need 354px, and below that they
+   would be squeezed rather than stacked. The panel is what is measured, never the window. */
+@container (max-width: 380px) {
+  .welcome-choose-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .welcome-choose {
+    max-height: min(42dvh, 360px);
+  }
+}
+
+/* Nothing here moves for somebody who asked not to be moved: the cards are simply there, and the tick simply
+   appears. The entrance is the only animation, so taking it away costs nothing but the flourish. */
+.welcome.reduced .welcome-choose-group,
+.welcome.reduced .welcome-choose-card,
+.welcome.reduced .welcome-choose-tick,
+.welcome.reduced .welcome-choose-icon {
+  animation: none;
+  transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .welcome-choose-group,
+  .welcome-choose-card,
+  .welcome-choose-tick,
+  .welcome-choose-icon {
+    animation: none;
+    transition: none;
+  }
+}
+.welcome-panel.is-choosing:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 6px;
 }

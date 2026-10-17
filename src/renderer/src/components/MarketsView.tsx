@@ -64,6 +64,9 @@ import type { DiscoveryAnswer, MarketDetail, WatchlistsAnswer } from '../../../m
 import type { MarketRow } from '../../../shared/markets/discovery'
 import type { NoticeKind } from '../lib/notices'
 import { Surface } from '../ui'
+import { useSurface } from '../lib/surfaces'
+import DeclareSurface from './DeclareSurface'
+import { marketsSurface, marketSurface, watchlistsSurface } from './marketsSurfaces'
 
 /**
  * Markets.
@@ -803,14 +806,37 @@ export default function MarketsView({
     onNotify('Added to the watchlist')
   }
 
-  const newList = async (): Promise<void> => {
-    const name = window.prompt('Name this watchlist')
-    if (name === null) return
+  /**
+   * Makes a watchlist and opens it.
+   *
+   * Apart from the asking, so that the button here and the declared control below both go through exactly this: the
+   * prompt is how a person says the name, and it is not the only way a name can arrive.
+   */
+  const createList = async (name: string): Promise<void> => {
     const answer = await window.api.marketsWatchlistCreate(name.trim() || 'Watchlist')
     if (complain(answer, 'That watchlist could not be created.')) return
     const next = answer as WatchlistsAnswer
     apply(next)
     setActiveList(next.watchlists[next.watchlists.length - 1]?.id ?? null)
+  }
+
+  const newList = async (): Promise<void> => {
+    const name = window.prompt('Name this watchlist')
+    if (name === null) return
+    await createList(name)
+  }
+
+  const deleteList = async (listId: string): Promise<void> => {
+    const answer = await window.api.marketsWatchlistRemove(listId)
+    if (complain(answer, 'That could not be deleted.')) return
+    setActiveList(null)
+    apply(answer as WatchlistsAnswer)
+  }
+
+  const removeFromList = async (listId: string, instrumentId: string): Promise<void> => {
+    const answer = await window.api.marketsWatchlistRemoveItem(listId, instrumentId)
+    if (complain(answer, 'That could not be removed.')) return
+    apply(answer as WatchlistsAnswer)
   }
 
   const list = lists.find((l) => l.id === activeList) ?? lists[0] ?? null
@@ -861,6 +887,109 @@ export default function MarketsView({
   const quote = open?.quote ?? null
   const price = quote?.last ?? null
   const pricePrecision = precisionFor(price)
+
+  // ---------------------------------------------------------------- what Orbis may work here
+  //
+  // Three screens declared, above every early return because they are hooks. Nothing below is a new way of doing
+  // anything: every getter reads the state this file already holds and every setter is the function one of the
+  // controls above already calls. The declarations themselves are in `marketsSurfaces.ts` so they can be driven in a
+  // test with no window at all.
+
+  useSurface(
+    marketsSurface({
+      enabled: () => enabled,
+      section: () => mode,
+      openSection: (id) => setMode(id as Mode),
+      pane: () => pane,
+      setPane: (id) => setPane(id as Pane),
+      search: () => query,
+      setSearch: (text) => {
+        // The box and the magnifier together: typing into a collapsed search would narrow a list nobody can see.
+        setQuery(text)
+        if (text !== '') setSearchOpen(true)
+      },
+      movers: () => moverKind,
+      setMovers: (kind) => setMoverKind(kind as 'gainers' | 'losers' | 'volume'),
+      moversOpen: () => moversOpen,
+      setMoversOpen,
+      panels: () => workspace,
+      setPanels: setWorkspace,
+      refresh: () => discover(true),
+      connection: () => connection,
+      ranking: () => ({
+        // Null until the first answer: "the provider could not answer" and "it has not answered yet" are different
+        // things, and a screen that reports the second as the first reports a fault at something fine.
+        available: discovery === null ? null : discovery.available === true,
+        gainers: discovery?.available === true ? discovery.gainers.length : 0,
+        tiles: discovery?.available === true ? discovery.tiles.length : 0,
+        busy: discovering
+      }),
+      openMarket: () => openId,
+      close: onClose
+    })
+  )
+
+  useSurface(
+    watchlistsSurface({
+      lists: () => lists,
+      activeList: () => list?.id ?? null,
+      setActiveList,
+      add: (listId, instrumentId) => addTo(listId, instrumentId),
+      removeItem: (listId, instrumentId) => removeFromList(listId, instrumentId),
+      create: (name) => createList(name),
+      remove: (listId) => deleteList(listId),
+      // Asked of the store again rather than read off this screen, which may not have drawn yet.
+      check: async () => {
+        const answer = await window.api.marketsWatchlists()
+        if (refused(answer)) throw new Error(answer.message ?? 'The watchlists could not be read.')
+        return answer.watchlists
+      },
+      showing: () => mode === 'markets' && pane === 'watchlists'
+    })
+  )
+
+  /*
+   * The open market's declaration, or null.
+   *
+   * Built here and registered by the one-line component at the bottom of this file, because a hook cannot be called
+   * conditionally and this screen must not exist while no market is open: a `markets/market` in the tree with every
+   * control unreadable would have a walk arrive somewhere that is not there.
+   */
+  const marketDeclaration = open
+    ? marketSurface({
+        market: () => ({ instrumentId: open.instrument.instrumentId, symbol: open.instrument.symbol, name: open.instrument.name }),
+        can: () => ({ candles: open.can.candles, book: open.can.orderBook, trades: open.can.trades, derivatives: open.can.derivatives === true, intervals: open.can.intervals }),
+        quote: () => (open.quote ? { last: open.quote.last, changePercent: open.quote.changePercent, freshness: open.quote.freshness } : null),
+        tab: () => tab,
+        setTab: (id) => setTab(id as Tab),
+        interval: () => interval,
+        // Both halves of pressing a timeframe button: the choice, and the candles for it.
+        setInterval: async (id) => {
+          setInterval_(id)
+          await loadCandles(open.instrument.instrumentId, id)
+        },
+        chartType: () => chartType,
+        setChartType: (id) => setChartType(id as ChartType),
+        allTimeframes: () => allIntervals,
+        setAllTimeframes: setAllIntervals,
+        indicators: () => indicators,
+        offered: () => offered,
+        addIndicator,
+        removeIndicator: (kind) => setIndicators((current) => current.filter((each) => each.kind !== kind)),
+        setIndicatorOption: (kind, option, value) =>
+          setIndicators((current) => current.map((each) => (each.kind === kind ? { ...each, options: { ...each.options, [option]: value } } : each))),
+        drawingTool: () => drawTool,
+        setDrawingTool: setDrawTool,
+        drawings: () => drawings,
+        patternView: () => patternView,
+        setPatternView: (id) => setPatternView(id as 'found' | 'library' | 'alerts' | 'history'),
+        favourite: () => favourites.includes(open.instrument.instrumentId),
+        toggleFavourite: () => toggleFavourite(open.instrument.instrumentId),
+        candles: () => ({ loaded: candles.length, note: candleNote, loading: loadingCandles }),
+        reloadCandles: () => loadCandles(open.instrument.instrumentId, interval),
+        close: closeMarket
+      })
+    : null
 
   // ---------------------------------------------------------------- rows
 
@@ -970,6 +1099,8 @@ export default function MarketsView({
      * because a stylesheet took any away.
      */
     <div className="view markets-view" data-density={experience.get('density')} role="region" aria-label="Markets">
+      {/* Draws nothing. It registers the open market's screen while there is one, and takes it away when there is not. */}
+      {marketDeclaration && <DeclareSurface declaration={marketDeclaration} />}
       <header className="view-head">
         <h2>Markets</h2>
         <CurrencyPicker currency={currency} />
@@ -1304,7 +1435,7 @@ export default function MarketsView({
               if (panel === 'movers' || panel === 'heatmap' || panel === 'breadth' || panel === 'overview') {
                 if (discovery?.available !== true) {
                   return (
-                    <p className="mk-quiet mk-ws-empty">
+                    <p className="view-empty">
                       {discovery === null && discovering
                         ? 'Loading markets\u2026'
                         : 'No configured provider can report every market at once, so there is nothing to rank here.'}
@@ -1411,7 +1542,7 @@ export default function MarketsView({
                 // The glossary, which is the part of Learn that stands alone. The guided tour does not belong in a pane
                 // somebody has made small, and pretending otherwise would put a walkthrough in a 200-pixel box.
                 return (
-                  <p className="mk-quiet mk-ws-empty">
+                  <p className="view-empty">
                     Learn is a walkthrough rather than a panel, so it opens from the section bar above where it has room
                     to be read.
                   </p>
@@ -1419,7 +1550,7 @@ export default function MarketsView({
               }
 
               return (
-                <p className="mk-quiet mk-ws-empty">
+                <p className="view-empty">
                   {/* Honest rather than a blank pane: this panel exists, and it is not one that works in a pane yet. */}
                   This panel is not one that can be shown inside the workspace yet. It is on the section bar above.
                 </p>
@@ -1634,11 +1765,7 @@ export default function MarketsView({
                     title="Delete this watchlist"
                     onClick={() => {
                       if (!window.confirm(`Delete the watchlist “${list.name}”? The markets themselves are not affected.`)) return
-                      void window.api.marketsWatchlistRemove(list.id).then((answer) => {
-                        if (complain(answer, 'That could not be deleted.')) return
-                        setActiveList(null)
-                        apply(answer as WatchlistsAnswer)
-                      })
+                      void deleteList(list.id)
                     }}
                   >
                     <Trash2 size={14} />
@@ -1682,12 +1809,7 @@ export default function MarketsView({
                           type="button"
                           className="tl-icon"
                           aria-label={`Remove ${item.instrument.symbol}`}
-                          onClick={() =>
-                            void window.api.marketsWatchlistRemoveItem(list.id, item.instrumentId).then((answer) => {
-                              if (complain(answer, 'That could not be removed.')) return
-                              apply(answer as WatchlistsAnswer)
-                            })
-                          }
+                          onClick={() => void removeFromList(list.id, item.instrumentId)}
                         >
                           <Trash2 size={13} />
                         </button>
@@ -1704,7 +1826,6 @@ export default function MarketsView({
         <section className="mk-main">
           {!open ? (
             <div className="mk-empty">
-              <LineChart size={26} />
               <p>Choose a market to see its price, chart, order book and trades.</p>
               <p className="pw-note is-quiet">
                 Crypto prices come from Binance’s public feed and are live. Every number on this screen carries its own
@@ -1975,7 +2096,7 @@ export default function MarketsView({
                           className="queue-btn small"
                           onClick={() => void loadCandles(open.instrument.instrumentId, interval)}
                         >
-                          <RefreshCw size={13} /> Try again
+                          Try again
                         </button>
                       )}
                     </div>

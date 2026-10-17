@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { CircleAlert, Download, RefreshCw, RotateCcw } from 'lucide-react'
+import { CircleAlert } from 'lucide-react'
 import type { UpdateStatus } from '../../../shared/updates'
 import { CHANNELS, describeUpdate } from '../../../shared/updates'
 import type { UpdateHistoryView, UpdateSettingsView } from '../../../shared/types'
@@ -102,15 +102,15 @@ export default function UpdateSettings(): React.JSX.Element {
           <div className="up-actions">
             {ready ? (
               <button type="button" className="queue-btn primary" disabled={busy} onClick={() => void run(() => window.api.restartAndUpdate())}>
-                <RotateCcw size={13} /> Restart &amp; Update
+                Restart &amp; Update
               </button>
             ) : status.state === 'update-available' ? (
               <button type="button" className="queue-btn primary" disabled={busy} onClick={() => void run(() => window.api.downloadUpdate())}>
-                <Download size={13} /> Download
+                Download
               </button>
             ) : (
               <button type="button" className="queue-btn" disabled={busy || status.state === 'checking'} onClick={() => void run(() => window.api.checkForUpdates())}>
-                <RefreshCw size={13} /> Check for updates
+                Check for updates
               </button>
             )}
             {downloading && (

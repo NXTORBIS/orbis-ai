@@ -67,12 +67,17 @@ function tableCells(node: HastLike | undefined): { header: string[]; rows: strin
 }
 
 /**
- * The chart under a table of numbers. It appears by itself (that is the point), can be hidden, and says what it
- * left out. The drawing is the plot engine's, shown as an image so nothing from a reply is ever put into the page
- * as markup.
+ * The chart under a table of numbers. It is **offered**, not drawn: the line saying a chart can be made is there,
+ * and the chart appears when somebody asks for it.
+ *
+ * It used to open by itself, and that was wrong. Asking a question and getting a table is one thing; getting a
+ * table and a chart card nobody asked for, in the middle of a reply, is the thing that made the chat feel full of
+ * boxes. Offering costs one quiet line; imposing costs the whole width of the reply.
+ *
+ * The drawing is the plot engine's, shown as an image so nothing from a reply is ever put into the page as markup.
  */
 function TableChart({ header, rows }: { header: string[]; rows: string[][] }): React.JSX.Element | null {
-  const [open, setOpen] = useState(true)
+  const [open, setOpen] = useState(false)
   const drawn = useMemo(() => {
     const c = tableChart(header, rows)
     if (!c) return null
@@ -85,7 +90,7 @@ function TableChart({ header, rows }: { header: string[]; rows: string[][] }): R
       <figcaption>
         <span>{drawn.c.title}</span>
         <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
-          {open ? 'Hide chart' : 'Show chart'}
+          {open ? 'Hide the chart' : 'Draw a chart of this'}
         </button>
       </figcaption>
       {open && (

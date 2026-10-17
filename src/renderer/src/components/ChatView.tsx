@@ -5,6 +5,7 @@ import type { Detail as ChooseDetail } from '../../../shared/choose/detect'
 import { ArrowDown, HatGlasses } from 'lucide-react'
 import type { Attachment, Conversation, Settings } from '../../../shared/types'
 import type { NoticeKind, StreamState } from '../lib/notices'
+import type { VisibilityChoice } from '../../../shared/featureVisibility'
 import type { ChatQueue } from '../lib/messageQueue'
 import Composer from './Composer'
 import MemoryOffer from './MemoryOffer'
@@ -37,6 +38,12 @@ interface Props {
   loaded: boolean
   model: string
   incognito: boolean
+  /**
+   * Which features this person has showing, passed straight through to the composer's "/" menu.
+   *
+   * Handed down rather than read here: the window reads the choice once and everything asks that one copy.
+   */
+  visibility: VisibilityChoice | null
   quickPromptsOpen: boolean
   onQuickPromptsChange(open: boolean): void
   onModelChange(model: string): void
@@ -436,6 +443,7 @@ export default function ChatView(props: Props): React.JSX.Element {
       onClearQueue={props.onClearQueue}
       onResumeQueue={props.onResumeQueue}
       effects={settings?.effects !== false}
+      visibility={props.visibility}
       quickPromptsOpen={props.quickPromptsOpen}
       onQuickPromptsChange={props.onQuickPromptsChange}
       onModelChange={props.onModelChange}

@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useId, useState } from 'react'
 import type { OrbisNotification, NotificationCategory } from '../../../shared/notifications'
 import type { NotificationsConfig } from '../../../shared/experience'
+import { useSurface } from '../lib/surfaces'
+import { notificationsSurface } from './settingsSurfaces'
 
 /**
  * What Orbis interrupts you for, and what it has interrupted you for lately.
@@ -74,6 +76,39 @@ export default function NotificationSettings(): React.JSX.Element | null {
     // Redrawn when something happens rather than on a timer: a list that polls is a list that is wrong between polls.
     return window.api.onNotificationsChanged(() => void load())
   }, [load])
+
+  /*
+   * What this page lets Orbis read and set.
+   *
+   * Above the early return below, because a hook has to be called every time this draws -- and that matters here
+   * rather than being a formality: until the personalisation has arrived there is nothing to read, and `settings`
+   * below throws instead of answering. A control whose getter throws is reported as "could not be read", which is the
+   * truth; one that hands back its default would report a switch as off because a file was slow.
+   *
+   * What it offers is in `settingsSurfaces.ts`, as a function of these same handlers.
+   */
+  useSurface(
+    notificationsSurface({
+      settings: () => {
+        if (!experience) throw new Error('This page has not finished loading.')
+        return experience.notifications
+      },
+      save: (next) => void onUpdate(next),
+      categories: CATEGORIES,
+      told: () => ({ total: items.length, unread: items.filter((one) => !one.read).length }),
+      shows: () => can?.native ?? null,
+      test: () => window.api.notificationTest(),
+      markAllRead: () => window.api.notificationRead(null).then(load),
+      clearAll: () => window.api.notificationClear(null).then(load),
+      // Asked of the application again rather than read off this screen, so that marking or clearing is checked
+      // against what is really kept and not against a list this screen may not have redrawn yet.
+      check: async () => {
+        const got = await window.api.notifications()
+        const all = got.items ?? []
+        return { total: all.length, unread: all.filter((one) => !one.read).length }
+      }
+    })
+  )
 
   if (!experience) return null
   const notifications = experience.notifications

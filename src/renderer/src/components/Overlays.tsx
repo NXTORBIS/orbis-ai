@@ -1,7 +1,8 @@
 import { CircleX, Info, TriangleAlert, X } from 'lucide-react'
 import { Modal } from '../ui'
 import type { Notice, NoticeKind } from '../lib/notices'
-import { SLASH_COMMANDS } from '../lib/commands'
+import { slashCommandsFor } from '../lib/commands'
+import { isVisible, type VisibilityChoice } from '../../../shared/featureVisibility'
 
 const KIND_ICONS: Record<NoticeKind, typeof Info> = { info: Info, warn: TriangleAlert, error: CircleX }
 
@@ -69,9 +70,10 @@ const SHORTCUTS: [string, string][] = [
   ['Ctrl + Shift + O', 'New chat'],
   ['Ctrl + Shift + N', 'Incognito chat'],
   ['Ctrl + B', 'Toggle chat history'],
-  ['Ctrl + K', 'Search chats'],
+  ['Ctrl + K', 'Everything Orbis can do, from one box'],
+  ['Ctrl + Shift + F', 'Search chats'],
   ['Ctrl + ,', 'Settings'],
-  ['Ctrl + Shift + U', 'Open Orbis Student'],
+
   ['Hold Ctrl + Shift + M', 'Push-to-talk: speak into chat, or into Browser Orion if the browser is open']
 ]
 
@@ -112,7 +114,22 @@ const BROWSER_SHORTCUTS: [string, string][] = [
   ['Shift + click', 'Open link in a new window']
 ]
 
-export function ShortcutsModal({ onClose }: { onClose(): void }): React.JSX.Element {
+/**
+ * The chords that belong to one screen, so a list of shortcuts never advertises one that lands on a hidden screen.
+ *
+ * One today. It is a table rather than a check in the list above because the list is pairs of strings, and a chord
+ * that quietly stops being advertised when its screen is switched off has to be able to say which screen that is.
+ */
+const FEATURE_SHORTCUTS: [string, string, string][] = [['Ctrl + Shift + U', 'Open Orbis Student', 'student']]
+
+export function ShortcutsModal({ onClose, visibility }: { onClose(): void; visibility: VisibilityChoice | null }): React.JSX.Element {
+  // What this person can really do. A shortcut onto a screen they switched off is an advertisement for nothing, and
+  // this repository has shipped a chord that did the wrong thing and one that did nothing at all.
+  const commands = slashCommandsFor(visibility)
+  const shortcuts: [string, string][] = [
+    ...SHORTCUTS,
+    ...FEATURE_SHORTCUTS.filter(([, , feature]) => isVisible(feature, visibility)).map(([keys, what]): [string, string] => [keys, what])
+  ]
   // Escape did nothing here. The shell steps aside when a dialog is on screen, rightly, and nothing ever picked
   // the key up on this side -- so the only way out of the shortcuts list was the mouse.
   return (
@@ -120,7 +137,7 @@ export function ShortcutsModal({ onClose }: { onClose(): void }): React.JSX.Elem
       <>
         <div className="modal-body">
           <p className="hud-label shortcuts-section">Commands · type / in the message box</p>
-          {SLASH_COMMANDS.map((command) => (
+          {commands.map((command) => (
             <div key={command.name} className="shortcut-row">
               <span>{command.description}</span>
               <kbd>
@@ -130,7 +147,7 @@ export function ShortcutsModal({ onClose }: { onClose(): void }): React.JSX.Elem
             </div>
           ))}
           <p className="hud-label shortcuts-section">Keyboard shortcuts</p>
-          {SHORTCUTS.map(([keys, action]) => (
+          {shortcuts.map(([keys, action]) => (
             <div key={keys} className="shortcut-row">
               <span>{action}</span>
               <kbd>{keys}</kbd>

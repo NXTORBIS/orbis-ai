@@ -1779,7 +1779,7 @@ export function ComposePanel({ onNotify }: { onNotify(message: string, kind?: No
         </label>
 
         <button type="button" className="queue-btn small" disabled={from === '' || to === '' || kind === ''} onClick={() => void deliver()}>
-          <Send size={13} /> Send
+          Send
         </button>
 
         {result && (

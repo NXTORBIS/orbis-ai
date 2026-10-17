@@ -123,9 +123,11 @@ export default function ProfilesView({
                 {profile.id === activeId ? 'In use' : switching === profile.id ? 'Switching…' : 'Switch to it'}
               </button>
               {profile.id !== DEFAULT_PROFILE_ID && (
-                <button type="button" className="icon-btn danger" aria-label={`Delete ${profile.name}`} title={profile.id === activeId ? 'Switch to another profile first' : 'Delete this profile and everything it kept'} onClick={() => void remove(profile)}>
-                  <Trash2 size={14} />
-                </button>
+                <span className="space-actions-more">
+                  <button type="button" className="icon-btn danger" aria-label={`Delete ${profile.name}`} title={profile.id === activeId ? 'Switch to another profile first' : 'Delete this profile and everything it kept'} onClick={() => void remove(profile)}>
+                    <Trash2 size={14} />
+                  </button>
+                </span>
               )}
             </div>
           </div>

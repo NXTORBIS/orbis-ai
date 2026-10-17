@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Loader2, PenLine, ShieldAlert, X } from 'lucide-react'
+import { Loader2, PenLine, ShieldAlert } from 'lucide-react'
 import CodePageView from './CodePageView'
 import { Surface } from '../ui'
 
@@ -111,7 +111,7 @@ export default function CodePageStudio({ onBack }: { onBack: () => void }): Reac
         /* Closes the Page without leaving the screen, so it is only there while one is open. */
         open ? (
           <button type="button" className="queue-btn small ghost" onClick={() => void close()}>
-            <X size={13} /> Close this Page
+            Close this Page
           </button>
         ) : null
       }
@@ -124,7 +124,7 @@ export default function CodePageStudio({ onBack }: { onBack: () => void }): Reac
             void build()
           }}
         >
-          <label className="pages-search code-page-input">
+          <label className="pages-ask code-page-input">
             <PenLine size={14} />
             <input
               value={request}

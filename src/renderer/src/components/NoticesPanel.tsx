@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ChevronDown, ChevronRight, Search } from 'lucide-react'
+import { ChevronDown, ChevronRight } from 'lucide-react'
 import type { NoticeEntry, Notices } from '../../../shared/types'
-import { Button, Modal } from '../ui'
+import { Button, Modal, SearchBox } from '../ui'
 
 /**
  * The licences of everything Orbis is built from, in full.
@@ -76,10 +76,7 @@ export default function NoticesPanel({ onClose }: { onClose(): void }): React.JS
               </Button>
             </div>
 
-            <label className="notices-search">
-              <Search size={13} aria-hidden="true" />
-              <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={`Search ${notices.packages.length} packages`} aria-label="Search the licences" />
-            </label>
+            <SearchBox value={query} onChange={setQuery} label="Search the licences" placeholder={`Search ${notices.packages.length} packages`} />
 
             <ul className="notices-list">
               {shown.map((entry) => (
