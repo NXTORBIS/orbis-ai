@@ -1,0 +1,551 @@
+/*
+ * The coach's own stylesheet. Everything starts cw-co- so no other screen can reach it, or it them.
+ *
+ * It owns no colours of its own: --cyan, --text, --faint, --line, --glass-border and --bg-mid are the window's, so
+ * the panel follows the light and dark themes without knowing which one it is in.
+ */
+
+.cw-co-root {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.cw-co-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.cw-co-tab {
+  padding: 4px 12px;
+  border: 1px solid var(--glass-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--faint);
+  font: inherit;
+  cursor: pointer;
+}
+.cw-co-tab[aria-selected='true'] {
+  color: var(--text);
+  border-color: var(--cyan);
+  background: color-mix(in srgb, var(--cyan) 14%, transparent);
+}
+.cw-co-tab:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+
+.cw-co-asof {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+}
+
+.cw-co-warning {
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--glass-border);
+  border-left: 3px solid var(--cyan);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--cyan) 7%, transparent);
+  font-size: var(--text-sm, 13px);
+  line-height: 1.55;
+}
+
+/*
+ * Where the figures came from, one sentence each.
+ *
+ * A column, not the wrapping row `cw-co-counted` uses: these are sentences, and three of them side by side in a
+ * narrow panel is unreadable.
+ */
+.cw-co-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding-left: 16px;
+  color: var(--faint);
+  font-size: var(--text-xs, 12px);
+  line-height: 1.55;
+}
+
+/* The files that are there and could not be read, one sentence each, inside the warning box. */
+.cw-co-problems {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 4px 0 0;
+  padding-left: 16px;
+}
+
+/*
+ * How many of somebody's games the engine has been over.
+ *
+ * Amber rather than the accent on purpose: it is not a warning and not a finding, it is the denominator under every
+ * number on the screen, and it has to be readable without looking like an error.
+ */
+.cw-co-coverage {
+  margin: 0;
+  padding: 8px 8px;
+  border: 1px solid var(--glass-border);
+  border-left: 3px solid var(--amber);
+  border-radius: 6px;
+  font-size: var(--text-sm, 13px);
+  line-height: 1.55;
+}
+
+.cw-co-pane { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+
+.cw-co-lead { margin: 0; font-size: var(--text-sm, 13px); line-height: 1.55; }
+.cw-co-title {
+  margin: 8px 0 0;
+  font-size: var(--text-md, 15px);
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--line);
+}
+.cw-co-subtitle { margin: 0; font-size: var(--text-sm, 13px); }
+.cw-co-dim { margin: 0; color: var(--faint); font-size: var(--text-xs, 12px); line-height: 1.55; }
+
+/* ---------------------------------------------------------------- what the record shows */
+
+.cw-co-weaknesses,
+.cw-co-refusals,
+.cw-co-caveats,
+.cw-co-counted,
+.cw-co-rates,
+.cw-co-goals,
+.cw-co-achievements,
+.cw-co-breakdown,
+.cw-co-figures,
+.cw-co-aside,
+.cw-co-evidence,
+.cw-co-plan,
+.cw-co-days {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.cw-co-weaknesses { display: flex; flex-direction: column; gap: 8px; }
+.cw-co-weakness {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 12px;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  background: var(--bg-mid);
+}
+.cw-co-weakness-top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.cw-co-rate {
+  padding: 1px 8px;
+  border: 1px solid var(--cyan);
+  border-radius: 999px;
+  color: var(--cyan);
+  font-size: var(--text-xs, 12px);
+  font-variant-numeric: tabular-nums;
+}
+.cw-co-because { margin: 0; font-size: var(--text-sm, 13px); line-height: 1.55; }
+
+.cw-co-evidence { display: flex; flex-direction: column; gap: 4px; }
+.cw-co-evidence li { display: flex; align-items: baseline; gap: 8px; }
+.cw-co-count {
+  min-width: 68px;
+  color: var(--text);
+  font-family: var(--mono, monospace);
+  font-size: var(--text-xs, 12px);
+  font-variant-numeric: tabular-nums;
+}
+
+.cw-co-works-on { margin: 0; font-size: var(--text-xs, 12px); line-height: 1.55; }
+.cw-co-aside-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--faint);
+  font-size: var(--text-xs, 12px);
+}
+
+.cw-co-refusals { display: flex; flex-direction: column; gap: 8px; }
+.cw-co-refusals li {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 8px 8px;
+  border: 1px dashed var(--glass-border);
+  border-radius: 6px;
+  font-size: var(--text-xs, 12px);
+  line-height: 1.55;
+}
+
+.cw-co-caveats { display: flex; flex-direction: column; gap: 4px; }
+.cw-co-caveats li {
+  padding-left: 12px;
+  border-left: 2px solid var(--line);
+  color: var(--faint);
+  font-size: var(--text-xs, 12px);
+  line-height: 1.55;
+}
+
+.cw-co-numbers {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: var(--text-xs, 12px);
+}
+/* The row you click to open this is a control, and measured in the running app it was 13px tall: 11px text with no
+   line height of its own and no padding, which is well under the smallest thing a person can reliably hit. The same
+   pattern on the other screens is 20px because their panels set a line height; this panel sets only a font size, so
+   it says both here. The words do not move -- only the target grows. */
+.cw-co-numbers summary {
+  cursor: pointer;
+  color: var(--faint);
+  padding: 4px 0;
+  line-height: 1.5;
+}
+.cw-co-numbers summary:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+.cw-co-numbers > * { margin-top: 4px; }
+.cw-co-numbers table { width: 100%; border-collapse: collapse; }
+.cw-co-numbers caption { text-align: left; color: var(--faint); padding-bottom: 4px; }
+.cw-co-numbers th,
+.cw-co-numbers td {
+  padding: 3px 4px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  font-weight: inherit;
+  font-variant-numeric: tabular-nums;
+}
+.cw-co-numbers thead th { color: var(--faint); }
+
+.cw-co-counted { display: flex; flex-wrap: wrap; gap: 4px 16px; color: var(--faint); }
+
+/* ---------------------------------------------------------------- the plan */
+
+.cw-co-plan { display: flex; flex-direction: column; gap: 8px; counter-reset: cw-co-line; }
+.cw-co-plan-line {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  padding: 8px 12px;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  background: var(--bg-mid);
+}
+.cw-co-plan-move { display: flex; flex-direction: column; gap: 3px; }
+.cw-co-plan-body { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
+.cw-co-plan-where { margin: 0; color: var(--cyan); font-size: var(--text-xs, 12px); }
+.cw-co-plan-acts { display: flex; flex-direction: column; gap: 3px; }
+.cw-co-plan-edit { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.cw-co-plan-edit label { color: var(--faint); font-size: var(--text-xs, 12px); }
+.cw-co-plan-edit input {
+  flex: 1;
+  min-width: 140px;
+  padding: 4px 8px;
+  border: 1px solid var(--glass-border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+}
+
+.cw-co-add {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px dashed var(--glass-border);
+  border-radius: 10px;
+}
+.cw-co-add-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; }
+.cw-co-add-field { display: flex; flex-direction: column; gap: 3px; min-width: 150px; flex: 1; }
+.cw-co-add-field label { color: var(--faint); font-size: var(--text-xs, 12px); }
+.cw-co-add-field input,
+.cw-co-add-field select {
+  padding: 4px 8px;
+  border: 1px solid var(--glass-border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+}
+.cw-co-add-field input:focus-visible,
+.cw-co-add-field select:focus-visible { outline: 2px solid var(--cyan); outline-offset: 0; }
+
+.cw-co-aside { display: flex; flex-direction: column; gap: 4px; }
+.cw-co-aside li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+
+/* ---------------------------------------------------------------- progress */
+
+.cw-co-range { display: flex; flex-direction: column; gap: 4px; }
+
+.cw-co-figures { display: flex; flex-wrap: wrap; gap: 8px; }
+.cw-co-figures li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 110px;
+  padding: 8px 12px;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  background: var(--bg-mid);
+}
+.cw-co-figures strong { font-size: 18px; font-variant-numeric: tabular-nums; }
+.cw-co-figures span { color: var(--faint); font-size: var(--text-xs, 12px); }
+
+.cw-co-breakdown { display: flex; flex-wrap: wrap; gap: 4px 16px; }
+.cw-co-breakdown li { display: flex; align-items: baseline; gap: 4px; font-size: var(--text-xs, 12px); }
+
+.cw-co-rates { display: flex; flex-direction: column; gap: 4px; }
+.cw-co-rate-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 1.2fr) 56px 84px minmax(0, 2.4fr);
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: var(--text-xs, 12px);
+}
+.cw-co-rate-name { color: var(--text); }
+.cw-co-rate-value { font-size: var(--text-sm, 13px); font-variant-numeric: tabular-nums; }
+.cw-co-rate-of { color: var(--faint); font-family: var(--mono, monospace); font-variant-numeric: tabular-nums; }
+.cw-co-thin .cw-co-rate-value { color: var(--faint); }
+
+.cw-co-accuracy { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; margin: 0; }
+.cw-co-accuracy strong { font-size: 22px; font-variant-numeric: tabular-nums; }
+.cw-co-formula {
+  margin: 0;
+  padding: 8px 8px;
+  border: 1px solid var(--glass-border);
+  border-radius: 6px;
+  background: var(--bg-mid);
+  font-size: var(--text-xs, 12px);
+  line-height: 1.55;
+}
+
+/* ---------------------------------------------------------------- charts */
+
+.cw-co-charts { display: flex; flex-direction: column; gap: 16px; }
+.cw-co-chart { margin: 0; display: flex; flex-direction: column; gap: 4px; }
+.cw-co-chart-top { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px; font-size: var(--text-sm, 13px); }
+.cw-co-chart-note { font-size: var(--text-xs, 12px); }
+
+.cw-co-svg {
+  width: 100%;
+  height: 210px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg-mid);
+}
+.cw-co-grid { stroke: var(--line); stroke-width: 1; }
+.cw-co-axis { stroke: var(--glass-border); stroke-width: 1; }
+.cw-co-tick { fill: var(--faint); font-size: 10px; }
+.cw-co-axis-name { fill: var(--faint); font-size: 11px; }
+.cw-co-bar { fill: color-mix(in srgb, var(--cyan) 65%, transparent); }
+.cw-co-dot { fill: var(--cyan); }
+.cw-co-line { fill: none; stroke: var(--cyan); stroke-width: 2; }
+/* A bucket with nothing in it: a mark on the baseline, never a value of nought. */
+.cw-co-nothing { stroke: var(--faint); stroke-width: 2; stroke-dasharray: 2 2; }
+
+/* ---------------------------------------------------------------- goals */
+
+.cw-co-switch { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+
+.cw-co-streak {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  background: var(--bg-mid);
+}
+.cw-co-streak-top { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; margin: 0; font-size: var(--text-sm, 13px); }
+.cw-co-streak-number { font-size: 30px; color: var(--cyan); font-variant-numeric: tabular-nums; }
+
+.cw-co-days { display: flex; flex-wrap: wrap; gap: 4px; }
+.cw-co-day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  min-width: 48px;
+  padding: 4px 4px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 10px;
+  color: var(--faint);
+}
+.cw-co-day-name { white-space: nowrap; }
+.cw-co-day-count { font-variant-numeric: tabular-nums; }
+.cw-co-met {
+  border-color: var(--cyan);
+  background: color-mix(in srgb, var(--cyan) 16%, transparent);
+  color: var(--text);
+}
+.cw-co-today { border-style: dashed; }
+
+.cw-co-goals { display: flex; flex-direction: column; gap: 8px; }
+.cw-co-goal,
+.cw-co-achievements li {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 12px;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+}
+.cw-co-goal-top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; font-size: var(--text-sm, 13px); }
+.cw-co-done { border-color: var(--cyan); }
+
+.cw-co-bar-track {
+  height: 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text) 10%, transparent);
+  overflow: hidden;
+}
+.cw-co-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--cyan);
+  transition: width 240ms ease;
+}
+
+.cw-co-achievements { display: flex; flex-direction: column; gap: 8px; }
+
+/* The panel sits beside the board on a wide screen and under it on a narrow one; the rates stop being a grid first. */
+@container cw-screen (max-width: 720px) {
+  .cw-co-rate-row { grid-template-columns: 1fr auto; }
+  .cw-co-rate-of,
+  .cw-co-rate-row .cw-co-dim { grid-column: 1 / -1; }
+  .cw-co-plan-line { flex-wrap: wrap; }
+  .cw-co-plan-acts { flex-direction: row; flex-wrap: wrap; }
+  .cw-co-svg { height: 180px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cw-co-bar-fill { transition: none; }
+}
+
+/*
+ * The board on the coach, and the list beside it.
+ *
+ * The coach had no board at all before this, which made a screen about somebody's chess into a page of writing
+ * about them. The board tab is the one place here that wants height rather than a scrollbar, so the root is told to
+ * give its height away when that tab is open -- without `min-height: 0` the column would be as tall as the board
+ * and the board would be asking the column how tall to be.
+ */
+.cw-co-root.is-board {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+.cw-co-root.is-board .cw-co-stage { flex: 1 1 auto; min-height: 0; padding-left: 0; padding-right: 0; }
+
+.cw-co-moments.is-empty {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--glass-border, rgba(160, 210, 255, 0.16));
+  border-radius: var(--radius-md, 10px);
+  background: color-mix(in srgb, var(--cyan, #3fd8ff) 4%, transparent);
+}
+
+.cw-co-moments-says { margin: 0; font-size: var(--text-sm, 12px); line-height: 1.5; }
+.cw-co-moments-origin { margin: 0; font-size: var(--text-xs, 11px); color: var(--faint); line-height: 1.5; }
+
+/* Four figures, not four sentences. */
+.cw-co-moments-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin: 0;
+}
+.cw-co-moments-counts div { display: flex; flex-direction: column; gap: 2px; }
+.cw-co-moments-counts dt { font-size: var(--text-xs, 11px); color: var(--faint); }
+.cw-co-moments-counts dd {
+  margin: 0;
+  font-family: var(--mono, monospace);
+  font-size: var(--text-lg, 15px);
+  color: var(--text);
+}
+
+.cw-co-moments-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px;
+  font-size: var(--text-sm, 12px);
+}
+.cw-co-moments-move { color: var(--text); }
+.cw-co-moments-loss { font-family: var(--mono, monospace); color: var(--faint); }
+
+.cw-co-moments-foot { display: flex; flex-direction: column; gap: 4px; }
+
+.cw-co-moments-list { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+
+.cw-co-moments-chips, .cw-co-moments-rows { list-style: none; margin: 0; padding: 0; }
+.cw-co-moments-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.cw-co-moments-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 2px 9px;
+  border: 1px solid var(--glass-border, rgba(160, 210, 255, 0.16));
+  border-radius: var(--radius-pill, 999px);
+  font-size: var(--text-xs, 11px);
+  color: var(--faint);
+}
+.cw-co-moments-chip-n { font-family: var(--mono, monospace); color: var(--text); }
+
+.cw-co-moments-rows { display: flex; flex-direction: column; gap: 2px; }
+.cw-co-moments-row {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 8px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm, 6px);
+  background: transparent;
+  color: var(--faint);
+  font: inherit;
+  font-size: var(--text-sm, 12px);
+  text-align: left;
+  cursor: pointer;
+}
+.cw-co-moments-row:hover { background: var(--hover, rgba(255, 255, 255, 0.07)); }
+.cw-co-moments-row:focus-visible { outline: 2px solid var(--cyan, #3fd8ff); outline-offset: 1px; }
+/* The one being shown. A fill and a left bar, never colour on its own. */
+.cw-co-moments-row[aria-current='true'] {
+  color: var(--text);
+  border-color: var(--cyan, #3fd8ff);
+  background: color-mix(in srgb, var(--cyan, #3fd8ff) 12%, transparent);
+}
+.cw-co-moments-row-move { font-family: var(--mono, monospace); color: var(--text); }
+.cw-co-moments-row-class { font-size: var(--text-xs, 11px); }
+.cw-co-moments-row-loss { font-family: var(--mono, monospace); }
+
+/*
+ * The colour of a judgement, with a shape behind it.
+ *
+ * A dot alone would be colour as the only signal, so the class is written out in words in the same row and in the
+ * strip over the board. These colours are the window's own status tokens.
+ */
+.cw-co-moments-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); }
+.cw-co-moments-dot.is-mistake { background: var(--amber, #ffbe4d); }
+.cw-co-moments-dot.is-blunder { background: var(--red, #ff4d6d); }
+.cw-co-moments-dot.is-missed-mate { background: var(--violet, #b388ff); }
+
+.cw-co-moments-class { font-size: var(--text-xs, 11px); text-transform: uppercase; letter-spacing: 0.06em; }
+.cw-co-moments-class.is-mistake { color: var(--amber, #ffbe4d); }
+.cw-co-moments-class.is-blunder { color: var(--red, #ff4d6d); }
+.cw-co-moments-class.is-missed-mate { color: var(--violet, #b388ff); }
+
+/* What the read is doing. Amber when it failed, because a failure that reads like a success is the worst state. */
+.cw-co-read { font-size: var(--text-xs, 11px); color: var(--faint); }
+.cw-co-read.is-failed { color: var(--amber, #ffbe4d); }

@@ -1,0 +1,383 @@
+/*
+ * The game report. Every class here starts cw-rv- so nothing in the window can reach into it and it cannot reach
+ * out.
+ *
+ * The board is not sized here: the shared layout measures the room and hands the board a pixel size, so this
+ * stylesheet only says how the things around the board behave. The one stacking rule asks a container query on the
+ * cw-screen container Chess World's root declares, because this screen answers to the room it has and not to the
+ * window.
+ *
+ * The colours are the window's own tokens -- --cyan for the accent, --faint for quieter text -- and the one place
+ * this screen invents anything is the class colours, which are built from the tokens with color-mix so they follow
+ * the theme rather than being six hard-coded hexes.
+ */
+
+.cw-rv-root {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  /* Not optional: without it this column is at least as tall as the board inside it, and the board and the box end
+     up asking each other how big they are. */
+  min-height: 0;
+  min-width: 0;
+  gap: 8px;
+}
+
+.cw-rv-stage { flex: 1 1 auto; min-height: 0; }
+
+/* ---- the bar across the top: run the pass, how deep, how far it has got */
+
+.cw-rv-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 8px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md, 10px);
+  background: var(--bg-mid);
+}
+
+.cw-rv-bar-run { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.cw-rv-bar-progress { display: flex; align-items: center; gap: 8px; flex: 1 1 220px; min-width: 0; }
+.cw-rv-bar-words { color: var(--faint); font-size: var(--text-xs, 11px); line-height: 1.4; }
+.cw-rv-keep { color: var(--faint); font-size: var(--text-xs, 11px); max-width: 24ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.cw-rv-meter {
+  flex: 1 1 auto;
+  min-width: 60px;
+  height: 5px;
+  border-radius: var(--radius-pill, 999px);
+  background: var(--glass-border);
+  overflow: hidden;
+}
+.cw-rv-meter > span { display: block; height: 100%; background: var(--cyan, #3fd8ff); }
+@media (prefers-reduced-motion: no-preference) {
+  .cw-rv-meter > span { transition: width 180ms linear; }
+}
+
+.cw-rv-depths { display: flex; gap: 4px; }
+.cw-rv-depth {
+  padding: 4px 8px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-pill, 999px);
+  background: transparent;
+  color: var(--faint);
+  font: inherit;
+  font-size: var(--text-xs, 11px);
+  cursor: pointer;
+}
+.cw-rv-depth.on { color: var(--text); border-color: var(--cyan, #3fd8ff); background: color-mix(in srgb, var(--cyan) 14%, transparent); }
+.cw-rv-depth:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+
+/* Anything the screen cannot do, or cannot know, is said in this one shape so it reads the same everywhere. */
+.cw-rv-warn {
+  margin: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--glass-border);
+  border-left: 3px solid var(--cyan, #3fd8ff);
+  border-radius: var(--radius-sm, 6px);
+  background: var(--bg-mid);
+  color: var(--text);
+  font-size: var(--text-sm, 12px);
+  line-height: 1.5;
+}
+.cw-rv-warn.is-small { font-size: var(--text-xs, 11px); }
+
+/* ---- the strip above the board: the opening, and the moments you can jump to */
+
+.cw-rv-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+
+.cw-rv-chip {
+  padding: 3px 10px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-pill, 999px);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-xs, 11px);
+  white-space: nowrap;
+  max-width: 34ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cw-rv-chip.is-opening { border-color: color-mix(in srgb, var(--cyan) 40%, var(--glass-border)); }
+.cw-rv-chip.is-moment { cursor: pointer; color: var(--faint); }
+.cw-rv-chip.is-moment:hover { color: var(--text); }
+/* Where you are is a fill and a ring, never colour alone. */
+.cw-rv-chip.is-moment.is-here {
+  color: var(--text);
+  border-color: var(--cyan, #3fd8ff);
+  background: color-mix(in srgb, var(--cyan) 14%, transparent);
+}
+.cw-rv-chip.is-moment:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+.cw-rv-chip.is-quiet { color: var(--faint); border-style: dashed; }
+
+/* ---- under the board: the buttons that walk the game, then the graph */
+
+.cw-rv-below { display: flex; flex-direction: column; gap: 6px; }
+
+/* ---- the left column: the dials and the bars */
+
+.cw-rv-side {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  overflow-y: auto;
+  max-height: 100%;
+}
+
+.cw-rv-dials { display: flex; gap: 8px; }
+
+.cw-rv-dial {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 4px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md, 10px);
+  background: var(--bg-mid);
+}
+.cw-rv-dial svg { width: 100%; max-width: 86px; height: auto; display: block; }
+.cw-rv-dial-track { stroke: var(--glass-border); }
+.cw-rv-dial-fill { stroke: var(--cyan, #3fd8ff); stroke-linecap: round; }
+/* Black's dial is the same accent at a lower weight, so the two are told apart by weight as well as by their label. */
+.cw-rv-dial-fill.is-b { stroke: color-mix(in srgb, var(--cyan) 55%, var(--text)); }
+.cw-rv-dial-text { fill: var(--text); font-size: 17px; font-variant-numeric: tabular-nums; }
+/* A figure nobody could measure is not shown in the colour of a figure. */
+.cw-rv-dial.is-unknown .cw-rv-dial-text { fill: var(--faint); }
+.cw-rv-dial-who { color: var(--text); font-size: var(--text-xs, 11px); }
+.cw-rv-dial-sub { color: var(--faint); font-size: var(--text-xs, 11px); text-align: center; line-height: 1.4; }
+
+.cw-rv-bars { display: flex; flex-direction: column; gap: 3px; }
+
+.cw-rv-barrow {
+  display: grid;
+  grid-template-columns: minmax(0, 7.5em) minmax(40px, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+}
+.cw-rv-barlabel { color: var(--text); font-size: var(--text-xs, 11px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cw-rv-barrow.is-unjudged .cw-rv-barlabel,
+.cw-rv-barrow.is-unjudged .cw-rv-barcount { color: var(--faint); }
+
+.cw-rv-bartrack { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cw-rv-barfill { display: block; height: 4px; border-radius: var(--radius-pill, 999px); background: var(--glass-border); min-width: 0; }
+/* Black's bar is the same colour at a lower weight, because two colours per class would be sixteen on screen. */
+.cw-rv-barfill.is-black { opacity: 0.55; }
+
+/*
+ * The classes, in colour.
+ *
+ * Built from the window's tokens with color-mix rather than written as hexes, so they follow the theme. The quiet
+ * end matters as much as the loud end: a move nobody judged must not look like a verdict, so it keeps the plain
+ * line colour and no accent at all.
+ */
+.cw-rv-barfill.is-best { background: var(--cyan, #3fd8ff); }
+.cw-rv-barfill.is-excellent { background: color-mix(in srgb, var(--cyan) 70%, transparent); }
+.cw-rv-barfill.is-good { background: color-mix(in srgb, var(--cyan) 45%, transparent); }
+.cw-rv-barfill.is-inaccuracy { background: color-mix(in srgb, #d8a24a 75%, var(--bg-mid)); }
+.cw-rv-barfill.is-mistake { background: color-mix(in srgb, #d8803f 80%, var(--bg-mid)); }
+.cw-rv-barfill.is-blunder,
+.cw-rv-barfill.is-missed-mate { background: color-mix(in srgb, #d85b4a 85%, var(--bg-mid)); }
+.cw-rv-barfill.is-unclear { background: var(--glass-border); }
+.cw-rv-barcount { color: var(--text); font-size: var(--text-xs, 11px); font-variant-numeric: tabular-nums; }
+.cw-rv-barsep { color: var(--faint); padding: 0 1px; }
+
+.cw-rv-legend { margin: 0; color: var(--faint); font-size: var(--text-xs, 11px); line-height: 1.4; }
+
+.cw-rv-awards { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 2px; font-size: var(--text-xs, 11px); color: var(--text); }
+.cw-rv-awards b { color: var(--cyan, #3fd8ff); }
+
+.cw-rv-letgo { display: flex; flex-direction: column; gap: 4px; }
+.cw-rv-letgo-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; }
+
+.cw-rv-coverage { display: flex; flex-direction: column; gap: 3px; }
+
+/* ---- the right column: the move list, the tabs, the pane */
+
+.cw-rv-right {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  min-width: 0;
+  max-height: 100%;
+}
+.cw-rv-list { flex: 1 1 40%; min-height: 120px; }
+.cw-rv-pane { flex: 1 1 60%; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
+.cw-rv-stack { display: flex; flex-direction: column; gap: 6px; }
+
+.cw-rv-tabs { display: flex; gap: 4px; flex-wrap: wrap; }
+.cw-rv-tab {
+  padding: 3px 10px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-pill, 999px);
+  background: transparent;
+  color: var(--faint);
+  font: inherit;
+  font-size: var(--text-xs, 11px);
+  cursor: pointer;
+}
+.cw-rv-tab.on { color: var(--text); border-color: var(--cyan, #3fd8ff); background: color-mix(in srgb, var(--cyan) 14%, transparent); }
+.cw-rv-tab:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+
+.cw-rv-h { margin: 2px 0 0; font-size: var(--text-sm, 12px); color: var(--text); }
+.cw-rv-faint { margin: 0; color: var(--faint); font-size: var(--text-xs, 11px); line-height: 1.5; }
+.cw-rv-formula { margin: 0; color: var(--text); font-size: var(--text-xs, 11px); line-height: 1.5; }
+
+.cw-rv-steps,
+.cw-rv-rules {
+  margin: 0;
+  padding-left: 16px;
+  color: var(--faint);
+  font-size: var(--text-xs, 11px);
+  line-height: 1.5;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.cw-rv-steps { color: var(--text); padding-left: 0; list-style: none; }
+
+/* ---- the summary: one short line each, every one tied to something measured */
+
+.cw-rv-points { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; }
+.cw-rv-points li {
+  display: flex;
+  gap: 6px;
+  padding-left: 10px;
+  border-left: 3px solid var(--glass-border);
+  color: var(--text);
+  font-size: var(--text-xs, 11px);
+  line-height: 1.5;
+}
+.cw-rv-points li.is-good { border-left-color: var(--green, #3ee58a); }
+.cw-rv-points li.is-bad { border-left-color: color-mix(in srgb, #d85b4a 80%, var(--bg-mid)); }
+
+.cw-rv-jump {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 4px 6px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm, 6px);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-xs, 11px);
+  text-align: left;
+  cursor: pointer;
+}
+/* A line of the summary is a line of words, so it is underlined on hover rather than drawn as a button. */
+.cw-rv-jump.is-line { border: 0; padding: 0; line-height: 1.5; }
+.cw-rv-jump.is-line:hover { text-decoration: underline; }
+.cw-rv-jump:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+.cw-rv-jump-sub { color: var(--faint); font-variant-numeric: tabular-nums; }
+
+/* ---- what is known about the move on the board */
+
+.cw-rv-facts { margin: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 4px 8px; }
+.cw-rv-facts > div { display: flex; flex-direction: column; min-width: 0; }
+.cw-rv-facts-wide { grid-column: 1 / -1; }
+.cw-rv-facts dt { color: var(--faint); font-size: var(--text-xs, 11px); }
+.cw-rv-facts dd { margin: 0; color: var(--text); font-size: var(--text-xs, 11px); line-height: 1.5; }
+
+/* ---- the moments */
+
+.cw-rv-moments { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; }
+
+.cw-rv-moment {
+  width: 100%;
+  display: grid;
+  gap: 1px;
+  padding: 6px 8px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md, 10px);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.cw-rv-moments li.is-here .cw-rv-moment { border-color: var(--cyan, #3fd8ff); background: color-mix(in srgb, var(--cyan) 10%, transparent); }
+.cw-rv-moment:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+
+.cw-rv-moment-at { font-size: var(--text-sm, 12px); color: var(--text); }
+.cw-rv-moment-swing { font-size: var(--text-xs, 11px); color: var(--cyan, #3fd8ff); font-variant-numeric: tabular-nums; }
+.cw-rv-moment-better,
+.cw-rv-moment-line { font-size: var(--text-xs, 11px); color: var(--faint); line-height: 1.4; }
+.cw-rv-moments-more { color: var(--faint); font-size: var(--text-xs, 11px); line-height: 1.4; }
+
+/* ---- the graph under the board */
+
+.cw-rv-graph { margin: 0; display: flex; flex-direction: column; gap: 2px; }
+.cw-rv-graph-frame { position: relative; padding-right: 44px; }
+.cw-rv-graph svg {
+  width: 100%;
+  height: 96px;
+  display: block;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm, 6px);
+  cursor: crosshair;
+}
+.cw-rv-graph-bg { fill: var(--bg-mid); }
+/* A stretch nobody searched is shaded and left empty. It is the one thing on the graph that is not a measurement. */
+.cw-rv-graph-gap { fill: color-mix(in srgb, var(--faint) 18%, transparent); }
+.cw-rv-graph-mid { stroke: var(--glass-border); stroke-width: 1.5; }
+.cw-rv-graph-rung { stroke: color-mix(in srgb, var(--glass-border) 60%, transparent); stroke-width: 1; stroke-dasharray: 4 6; }
+.cw-rv-graph-tick { stroke: var(--glass-border); stroke-width: 1; }
+.cw-rv-graph-line { stroke: var(--cyan, #3fd8ff); stroke-width: 2; vector-effect: non-scaling-stroke; }
+.cw-rv-graph-dot { fill: var(--cyan, #3fd8ff); }
+.cw-rv-graph-moment { fill: none; stroke: var(--cyan, #3fd8ff); stroke-width: 2; vector-effect: non-scaling-stroke; }
+.cw-rv-graph-now { stroke: var(--text); stroke-width: 1; stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; }
+
+.cw-rv-graph-scale {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 44px;
+  height: 96px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.cw-rv-graph-scale li {
+  position: absolute;
+  right: 0;
+  transform: translateY(-50%);
+  font-size: 10px;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.cw-rv-graph-axis { position: relative; height: 12px; margin: 0 44px 0 0; padding: 0; list-style: none; }
+.cw-rv-graph-axis li {
+  position: absolute;
+  transform: translateX(-50%);
+  font-size: 10px;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.cw-rv-graph-note { margin: 2px 0 0; color: var(--faint); font-size: 10px; line-height: 1.45; }
+
+/*
+ * When this screen is narrow the graph's caption and the scale eat the board, so the caption goes and the graph
+ * gets shorter. `cw-screen` is the container Chess World's root declares, and this asks that rather than the
+ * window: the board sits beside two panels, and how wide the window is says nothing about the room it has.
+ */
+@container cw-screen (max-width: 900px) {
+  .cw-rv-graph-note { display: none; }
+  .cw-rv-graph svg,
+  .cw-rv-graph-scale { height: 72px; }
+  .cw-rv-keep { display: none; }
+}
+
+/* The engine's best line from the position a move was played in, in words, under the move it is compared with. */
+.cw-rv-bestline { margin: 0 0 8px; font-size: var(--text-sm, 12px); color: var(--text, #ededef); line-height: 1.5; }
+.cw-rv-bestline b { color: var(--cyan, #3fd8ff); font-weight: 600; }

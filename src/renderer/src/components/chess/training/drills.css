@@ -1,0 +1,237 @@
+/*
+ * Drills: a position played out against the engine.
+ *
+ * Everything here starts `cw-dr-`, so no other stylesheet can reach it and it can reach nothing else. A stylesheet
+ * is one global namespace and a duplicate class name is silent -- `src/shared/cssCollisions.test.ts` is what makes
+ * that a rule rather than a habit.
+ *
+ * Widths come from a container query on `cw-screen`, Chess World's own container, never from the window: beside the
+ * chat sidebar this screen is about 600px wide while the window is 1600.
+ *
+ * The board here is the real board component, so none of its rules are repeated below -- only the box it sits in.
+ */
+
+.cw-dr {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  gap: 16px;
+  padding: 4px 0 16px;
+}
+
+.cw-dr-side {
+  flex: 0 0 252px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+  padding-right: 8px;
+  border-right: 1px solid var(--line);
+}
+
+.cw-dr-main {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  /*
+   * Not `overflow-y: auto`. The board is measured against the height this column has, and a column that scrolls is
+   * as tall as its content -- so the stage would be measuring a box the board had just made taller. The panel
+   * beside the board scrolls instead, which is the shared stage's own arrangement.
+   */
+  overflow: hidden;
+}
+
+/* ---------------------------------------------------------------- the list down the side */
+
+.cw-dr-seg { display: flex; flex-wrap: wrap; gap: 4px; }
+
+.cw-dr-tab {
+  flex: 1 1 auto;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm, 6px);
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-xs, 11px);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.cw-dr-tab:hover { background: color-mix(in srgb, var(--cyan) 7%, transparent); }
+.cw-dr-tab:focus-visible { outline: 2px solid var(--cyan); outline-offset: -2px; }
+.cw-dr-tab.on {
+  border-color: var(--cyan);
+  background: color-mix(in srgb, var(--cyan) 14%, transparent);
+}
+
+.cw-dr-says {
+  margin: 0;
+  font-size: var(--text-xs, 11px);
+  line-height: 1.45;
+  color: var(--faint);
+}
+
+.cw-dr-warn {
+  margin: 0;
+  padding: 8px 8px;
+  border: 1px solid color-mix(in srgb, #e0b341 45%, var(--line));
+  border-radius: var(--radius-sm, 6px);
+  font-size: var(--text-xs, 11px);
+  line-height: 1.45;
+  color: var(--text);
+  background: color-mix(in srgb, #e0b341 8%, transparent);
+}
+
+.cw-dr-items { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+
+.cw-dr-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 8px 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm, 6px);
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.cw-dr-item strong { font-size: var(--text-sm, 13px); font-weight: 600; }
+.cw-dr-item small { font-size: var(--text-xs, 11px); color: var(--faint); line-height: 1.35; }
+.cw-dr-item:hover { background: color-mix(in srgb, var(--cyan) 6%, transparent); }
+.cw-dr-item:focus-visible { outline: 2px solid var(--cyan); outline-offset: -2px; }
+.cw-dr-item-on {
+  border-color: var(--cyan);
+  background: color-mix(in srgb, var(--cyan) 12%, transparent);
+}
+
+.cw-dr-refused { font-size: var(--text-xs, 11px); color: var(--faint); }
+.cw-dr-refused summary { cursor: pointer; }
+.cw-dr-refused ul { margin: 4px 0 0; padding-left: 16px; line-height: 1.45; }
+
+/* ---------------------------------------------------------------- the drill itself */
+
+.cw-dr-head { display: flex; flex-direction: column; gap: 3px; }
+
+.cw-dr-title { margin: 0; font-size: var(--text-md, 15px); font-weight: 600; }
+
+.cw-dr-objective {
+  margin: 0;
+  font-size: var(--text-sm, 13px);
+  line-height: 1.45;
+  color: var(--text);
+}
+
+/*
+ * The board is laid out by the shared stage now, not by this file.
+ *
+ * What was here was `.cw-dr-table` as a flex row with the board column fixed at 380px -- a third of the screen
+ * given to the thing the screen is about. The stage measures the room instead and the board takes whatever is left
+ * after the panel, which is the opposite way round. `.cw-dr-stage` is only here to take the padding off, because
+ * this screen already has its own.
+ */
+.cw-dr-stage { padding: 0; }
+
+.cw-dr-under {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.cw-dr-state { font-size: var(--text-sm, 13px); line-height: 1.4; color: var(--text); }
+
+.cw-dr-clock {
+  font-size: var(--text-xs, 11px);
+  font-variant-numeric: tabular-nums;
+  color: var(--faint);
+  white-space: nowrap;
+}
+
+.cw-dr-controls { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.cw-dr-aside {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cw-dr-figures { display: flex; flex-wrap: wrap; gap: 16px; margin: 0; }
+.cw-dr-figures div { display: flex; flex-direction: column; gap: 1px; }
+.cw-dr-figures dt {
+  font-size: var(--text-xs, 11px);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+.cw-dr-figures dd {
+  margin: 0;
+  font-size: var(--text-sm, 13px);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.cw-dr-verdict {
+  margin: 0;
+  padding: 8px 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm, 6px);
+  font-size: var(--text-sm, 13px);
+  line-height: 1.45;
+}
+.cw-dr-verdict-converted {
+  border-color: color-mix(in srgb, var(--cyan) 45%, var(--line));
+  background: color-mix(in srgb, var(--cyan) 10%, transparent);
+}
+.cw-dr-verdict-missed {
+  border-color: color-mix(in srgb, #c2576a 45%, var(--line));
+  background: color-mix(in srgb, #c2576a 9%, transparent);
+}
+.cw-dr-verdict-unclear {
+  border-color: color-mix(in srgb, #e0b341 45%, var(--line));
+  background: color-mix(in srgb, #e0b341 8%, transparent);
+}
+
+.cw-dr-method {
+  margin: 0;
+  font-size: var(--text-sm, 13px);
+  line-height: 1.5;
+  color: var(--text);
+}
+
+.cw-dr-caveats {
+  margin: 0;
+  padding-left: 16px;
+  font-size: var(--text-xs, 11px);
+  line-height: 1.55;
+  color: var(--faint);
+}
+
+.cw-dr-where { font-size: var(--text-xs, 11px); color: var(--faint); }
+.cw-dr-where summary { cursor: pointer; }
+.cw-dr-where p { margin: 4px 0 0; line-height: 1.5; }
+
+/* ---------------------------------------------------------------- narrow: the panel, not the window */
+
+@container cw-screen (max-width: 900px) {
+  /* Narrow is the stage's own business: it moves the panel under the board and the board keeps the width. */
+}
+
+@container cw-screen (max-width: 760px) {
+  .cw-dr { flex-direction: column; gap: 8px; }
+  .cw-dr-side {
+    flex: 0 0 auto;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+    padding: 0 0 12px;
+    overflow: visible;
+  }
+}

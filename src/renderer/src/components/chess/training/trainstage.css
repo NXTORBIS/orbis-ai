@@ -1,0 +1,116 @@
+/*
+ * The Train group's arrangement, and the square the board is not in.
+ *
+ * Every class starts cw-ts-, so no other stylesheet can reach it and it can reach nothing else. The colours are
+ * the window's own design tokens, every one written with a fallback, because a wrong token name fails silently and
+ * leaves grey text on grey.
+ *
+ * The column widths copy the shared stage deliberately: the middle column takes the room that is left over and the
+ * columns beside it are given a range, which is what makes the board the biggest thing on the screen rather than
+ * whatever is left after the panels. A board that is a percentage of a shrink-to-fit box is what made these
+ * screens 357 pixels wide at any window size.
+ *
+ * ## There is no rule in here that hides a board
+ *
+ * Not display, not visibility, not an opacity, not a blur, not a colour that matches the background. When a round
+ * has no board there is no board in the document; .cw-ts-empty is what is drawn instead of one.
+ */
+
+.cw-ts-away {
+  container-type: inline-size;
+  container-name: cw-ts;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-4, 16px);
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  padding: var(--space-3, 12px) var(--space-4, 16px) var(--space-4, 16px);
+  overflow: hidden;
+}
+
+.cw-ts-away.has-right { grid-template-columns: minmax(0, 1fr) minmax(240px, 0.34fr); }
+.cw-ts-away.has-left { grid-template-columns: minmax(200px, 0.28fr) minmax(0, 1fr); }
+.cw-ts-away.has-left.has-right {
+  grid-template-columns: minmax(180px, 0.24fr) minmax(0, 1fr) minmax(240px, 0.32fr);
+}
+
+.cw-ts-mid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2, 8px);
+  min-width: 0;
+  min-height: 0;
+}
+
+/*
+ * The box the empty square is measured against.
+ *
+ * min-height: 0 is what makes the measurement mean anything. Without it a flex child is at least as tall as its
+ * content, and the content is the thing whose size is being worked out from the box.
+ */
+.cw-ts-slot {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  display: grid;
+  place-items: center;
+}
+
+.cw-ts-above, .cw-ts-below { flex: 0 0 auto; min-height: 0; }
+.cw-ts-tight { flex: 0 0 auto; margin: 0; font-size: var(--text-sm, 12px); color: var(--amber, #ffbe4d); }
+
+.cw-ts-left, .cw-ts-right {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3, 12px);
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* Narrow: the panels go under the board rather than squeezing it. The board is what the screen is about. */
+@container cw-ts (max-width: 900px) {
+  .cw-ts-away, .cw-ts-away.has-left, .cw-ts-away.has-right, .cw-ts-away.has-left.has-right {
+    grid-template-columns: minmax(0, 1fr);
+    overflow-y: auto;
+  }
+  .cw-ts-left, .cw-ts-right { overflow: visible; max-height: none; }
+  .cw-ts-slot { min-height: min(72vh, 92vw); }
+}
+
+/* ---------------------------------------------------------------- the place the board is not */
+
+.cw-ts-empty {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2, 8px);
+  padding: var(--space-4, 16px);
+  border: 1px dashed var(--glass-border, rgba(160, 210, 255, 0.16));
+  border-radius: var(--radius-md, 10px);
+  background:
+    repeating-linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--cyan, #3fd8ff) 4%, transparent) 0 14px,
+      transparent 14px 28px
+    );
+  text-align: center;
+}
+
+.cw-ts-empty-label {
+  margin: 0;
+  font-family: var(--display, var(--font-display, inherit));
+  font-size: var(--text-lg, 15px);
+  letter-spacing: 0.02em;
+}
+
+.cw-ts-empty-why {
+  margin: 0;
+  max-width: 40ch;
+  font-size: var(--text-sm, 12px);
+  line-height: 1.5;
+  color: var(--faint, #7f848f);
+}

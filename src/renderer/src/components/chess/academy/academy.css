@@ -1,0 +1,454 @@
+/*
+ * The Academy's own stylesheet. Every class starts cw-ac- so nothing else in the window can reach it, or it them.
+ *
+ * Layout is asked of the Academy's own width, not the window's: it sits beside a sidebar and inside a screen, and a
+ * window-width media query would be answering a question nobody asked. The root carries `container-name: cw-screen`
+ * so the queries below measure this screen whether it is mounted on its own or inside Chess World's own container.
+ *
+ * Nothing here says anything with colour alone: a state has a word beside it everywhere it has a tint.
+ */
+
+.cw-ac-screen {
+  container-type: inline-size;
+  container-name: cw-screen;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+/* ---------------------------------------------------------------- the strip at the top */
+
+.cw-ac-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 8px;
+}
+.cw-ac-tab {
+  padding: 8px 12px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--faint);
+  font: inherit;
+  cursor: pointer;
+}
+.cw-ac-tab[aria-selected='true'] {
+  color: var(--text);
+  border-color: var(--line);
+  background: color-mix(in srgb, var(--cyan) 10%, transparent);
+}
+.cw-ac-tab:focus-visible { outline: 2px solid var(--cyan); outline-offset: -2px; }
+
+.cw-ac-body { flex: 1; min-height: 0; overflow-y: auto; padding-right: 4px; }
+
+.cw-ac-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 12px;
+  border: 1px solid var(--glass-border);
+  border-left: 3px solid var(--cyan);
+  border-radius: 10px;
+  background: var(--bg-mid);
+}
+.cw-ac-banner p { margin: 0; font-size: var(--text-sm, 13px); }
+.cw-ac-banner ul { margin: 0; padding-left: 16px; font-size: var(--text-sm, 13px); color: var(--faint); }
+
+/* ---------------------------------------------------------------- shared small things */
+
+.cw-ac-faint { margin: 0; color: var(--faint); font-size: var(--text-sm, 13px); }
+.cw-ac-note {
+  margin: 0;
+  padding: 8px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--glass-border);
+  background: color-mix(in srgb, var(--cyan) 8%, transparent);
+  font-size: var(--text-sm, 13px);
+}
+.cw-ac-good { margin: 0; color: var(--text); font-weight: 600; }
+.cw-ac-plain { margin: 0; color: var(--text); }
+.cw-ac-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.cw-ac-list { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; }
+.cw-ac-h { margin: 0; font-size: var(--text-md, 15px); }
+.cw-ac-text { margin: 0; line-height: 1.55; max-width: 70ch; }
+
+.cw-ac-faulty {
+  margin: 0;
+  padding: 8px 8px;
+  border: 1px solid var(--glass-border);
+  border-left: 3px solid #e2a23b;
+  border-radius: 6px;
+  font-size: var(--text-sm, 13px);
+}
+.cw-ac-faults { margin: 4px 0 0; padding-left: 20px; font-size: var(--text-sm, 13px); color: var(--faint); }
+
+/* ---------------------------------------------------------------- a task, beside the board */
+
+.cw-ac-taskpanel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  background: var(--bg-mid);
+}
+.cw-ac-taskpanel.is-solved { border-color: color-mix(in srgb, var(--cyan) 55%, var(--glass-border)); }
+.cw-ac-taskpanel.is-broken { border-left: 3px solid #e2a23b; }
+.cw-ac-taskhead { display: flex; flex-direction: column; gap: 4px; }
+.cw-ac-prompt { margin: 0; font-size: var(--text-md, 15px); }
+.cw-ac-asked { margin: 0; color: var(--text); font-size: var(--text-sm, 13px); }
+.cw-ac-checked { margin: 0; color: var(--faint); font-size: var(--text-sm, 12px); }
+
+.cw-ac-turn { margin: 0; font-size: var(--text-sm, 13px); color: var(--text); }
+.cw-ac-worth { margin: 0; font-size: var(--text-sm, 13px); color: var(--faint); }
+.cw-ac-reply { margin: 0; font-size: var(--text-sm, 13px); color: var(--text); }
+
+.cw-ac-played {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-variant-numeric: tabular-nums;
+}
+.cw-ac-played li {
+  padding: 2px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: var(--text-sm, 13px);
+}
+.cw-ac-played li.is-them { color: var(--faint); border-style: dashed; }
+
+.cw-ac-hints { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; font-size: var(--text-sm, 13px); }
+
+.cw-ac-verdict {
+  padding: 8px 12px;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  font-size: var(--text-sm, 13px);
+}
+.cw-ac-verdict p { margin: 0; }
+.cw-ac-verdict.is-good { border-left: 3px solid var(--cyan); }
+.cw-ac-verdict.is-wrong { border-left: 3px solid #d2766a; }
+.cw-ac-verdict.is-rules { border-left: 3px solid #8e93a1; }
+.cw-ac-verdict.is-plain { border-left: 3px solid var(--line); }
+.cw-ac-why { margin-top: 4px; color: var(--faint); }
+
+.cw-ac-over { display: flex; flex-direction: column; gap: 4px; }
+.cw-ac-lessonline { margin: 0; color: var(--faint); font-size: var(--text-sm, 13px); }
+.cw-ac-line { margin: 0; font-size: var(--text-sm, 13px); }
+
+.cw-ac-answer { display: flex; flex-direction: column; gap: 8px; }
+.cw-ac-addsquare { display: flex; align-items: flex-end; gap: 8px; flex-wrap: wrap; }
+.cw-ac-input {
+  width: 7ch;
+  padding: 4px 8px;
+  border: 1px solid var(--glass-border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+}
+.cw-ac-input:focus-visible { outline: 2px solid var(--cyan); outline-offset: 1px; }
+.cw-ac-chosen { display: flex; flex-wrap: wrap; gap: 4px; margin: 0; padding: 0; list-style: none; }
+
+/* ---------------------------------------------------------------- a lesson */
+
+.cw-ac-lesson { display: flex; flex-direction: column; gap: 8px; flex: 1 1 auto; min-height: 0; min-width: 0; }
+.cw-ac-lessonhead { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; flex: 0 0 auto; }
+.cw-ac-lessonhead h3 { margin: 0; }
+.cw-ac-crumb { color: var(--faint); font-size: var(--text-sm, 13px); }
+.cw-ac-intro { display: flex; flex-direction: column; gap: 8px; max-width: 70ch; }
+.cw-ac-intro p { margin: 0; line-height: 1.55; }
+.cw-ac-intro h4 { margin: 0; font-size: var(--text-sm, 13px); color: var(--faint); text-transform: uppercase; letter-spacing: 0.04em; }
+.cw-ac-objectives { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; }
+
+
+.cw-ac-callout {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 12px;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  max-width: 70ch;
+}
+.cw-ac-callout p { margin: 0; line-height: 1.5; }
+.cw-ac-callout strong { font-size: var(--text-sm, 12px); text-transform: uppercase; letter-spacing: 0.04em; color: var(--faint); }
+.cw-ac-callout.is-tip { border-left: 3px solid var(--cyan); }
+.cw-ac-callout.is-warning { border-left: 3px solid #e2a23b; }
+.cw-ac-callout.is-note { border-left: 3px solid var(--line); }
+
+.cw-ac-table { border-collapse: collapse; font-size: var(--text-sm, 13px); }
+.cw-ac-table th,
+.cw-ac-table td { border: 1px solid var(--line); padding: 4px 8px; text-align: left; }
+.cw-ac-table th { color: var(--faint); font-weight: 600; }
+
+
+.cw-ac-assessment { display: flex; flex-direction: column; gap: 8px; }
+.cw-ac-assessment h4 { margin: 0; }
+.cw-ac-assessment h5 { margin: 0; font-size: var(--text-sm, 13px); color: var(--faint); }
+.cw-ac-standings { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
+.cw-ac-standings li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.cw-ac-standings li.is-done { border-left: 3px solid var(--cyan); }
+.cw-ac-standings strong { font-weight: 600; }
+.cw-ac-standings span { font-size: var(--text-sm, 13px); }
+.cw-ac-standings small { color: var(--faint); font-size: var(--text-sm, 12px); }
+
+/* ---------------------------------------------------------------- the course map */
+
+.cw-ac-asking {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--cyan);
+  border-radius: 10px;
+  background: var(--bg-mid);
+}
+.cw-ac-asking h4 { margin: 0; }
+.cw-ac-asking p { margin: 0; }
+
+.cw-ac-themes { margin: 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 8px; }
+.cw-ac-themes li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  min-width: 170px;
+}
+.cw-ac-themes span { font-size: var(--text-sm, 13px); color: var(--faint); }
+.cw-ac-themes small { font-size: var(--text-sm, 12px); color: var(--cyan); }
+
+/* ---------------------------------------------------------------- what is known about progress */
+
+.cw-ac-standing { display: flex; flex-direction: column; gap: 16px; }
+.cw-ac-standing h3,
+.cw-ac-standing h4 { margin: 0; }
+.cw-ac-standing section { display: flex; flex-direction: column; gap: 8px; }
+.cw-ac-concepts { margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 8px; }
+.cw-ac-concepts li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.cw-ac-concepts li.is-taught { border-left: 3px solid var(--cyan); }
+.cw-ac-concepts li.is-credited { border-left: 3px dashed var(--faint); }
+.cw-ac-concepts strong { font-size: var(--text-sm, 13px); }
+.cw-ac-concepts span { font-size: var(--text-sm, 12px); color: var(--faint); }
+
+.cw-ac-facts { margin: 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 8px; }
+.cw-ac-facts li {
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  font-size: var(--text-sm, 13px);
+}
+.cw-ac-facts strong { display: block; font-size: var(--text-md, 18px); font-variant-numeric: tabular-nums; }
+
+/* ---------------------------------------------------------------- narrow */
+
+@container cw-screen (max-width: 760px) {
+  .cw-ac-concepts { grid-template-columns: 1fr; }
+  /* The outline becomes a row of steps across the top rather than a column taking width off the board. */
+  .cw-ac-outline ol { flex-direction: row; overflow-x: auto; }
+  .cw-ac-outstep { white-space: nowrap; }
+}
+
+/* ---------------------------------------------------------------- the board, and the columns beside it
+
+   Three of the four tabs put the board in `ChessStage`, which measures the room the middle column has and draws
+   the board that big. For that measurement to mean anything every box above it must have a height of its own: each
+   is a flex column with `min-height: 0`, and only the writing beside the board scrolls. A box that scrolls is as
+   tall as its content, and a board measured against one of those grows until it is off the bottom of the screen.
+*/
+
+.cw-ac-body.is-stage { overflow: hidden; display: flex; flex-direction: column; padding-right: 0; }
+.cw-ac-stage { flex: 1 1 auto; min-height: 0; padding: 0; }
+.cw-ac-map,
+.cw-ac-review { display: flex; flex-direction: column; gap: 8px; flex: 1 1 auto; min-height: 0; min-width: 0; }
+
+/* The column beside the board. It scrolls; the board does not. */
+.cw-ac-side { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.cw-ac-side h4 { margin: 0; }
+.cw-ac-side h5 {
+  margin: 0;
+  font-size: var(--text-xs, 11px);
+  color: var(--faint, #7f848f);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.cw-ac-readnote { padding-top: 8px; border-top: 1px solid var(--line, rgba(255, 255, 255, .09)); }
+
+/* Under the board: what is on it, the line's own buttons, and the way through the lesson. */
+.cw-ac-under { display: flex; flex-direction: column; gap: 6px; }
+.cw-ac-boardsays { margin: 0; font-size: var(--text-sm, 12px); color: var(--faint, #7f848f); }
+.cw-ac-walk { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.cw-ac-walk .cw-ac-faint { flex: 1; }
+.cw-ac-arrowsays { margin: 0; padding-left: 16px; font-size: var(--text-sm, 12px); color: var(--faint, #7f848f); }
+
+.cw-ac-chip {
+  padding: 1px 8px;
+  border: 1px solid var(--line, rgba(255, 255, 255, .09));
+  border-radius: var(--radius-pill, 999px);
+  color: var(--faint, #7f848f);
+  font-size: var(--text-xs, 11px);
+  white-space: nowrap;
+}
+.cw-ac-spacer { flex: 1 1 auto; }
+
+/* ---------------------------------------------------------------- the outline of a lesson's steps */
+
+.cw-ac-outline { min-width: 0; }
+.cw-ac-outline ol { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 2px; }
+.cw-ac-outstep {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  width: 100%;
+  padding: 5px 8px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm, 6px);
+  background: transparent;
+  color: var(--faint, #7f848f);
+  font: inherit;
+  font-size: var(--text-sm, 12px);
+  text-align: left;
+  cursor: pointer;
+}
+.cw-ac-outstep:hover { background: var(--hover, rgba(255, 255, 255, .07)); color: var(--text); }
+.cw-ac-outstep:focus-visible { outline: 2px solid var(--cyan, #3fd8ff); outline-offset: -2px; }
+/* Where you are is a fill and a bar down the side, never the fill alone. */
+.cw-ac-outstep.is-here {
+  color: var(--text);
+  border-color: var(--line-strong, rgba(255, 255, 255, .14));
+  border-left: 3px solid var(--cyan, #3fd8ff);
+  background: color-mix(in srgb, var(--cyan, #3fd8ff) 10%, transparent);
+}
+.cw-ac-outstep.is-task { color: var(--text); }
+.cw-ac-outnum { min-width: 1.6em; font-variant-numeric: tabular-nums; color: var(--faint, #7f848f); }
+.cw-ac-outlabel { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.cw-ac-outtag {
+  padding: 0 6px;
+  border: 1px solid var(--line, rgba(255, 255, 255, .09));
+  border-radius: var(--radius-pill, 999px);
+  font-size: var(--text-xs, 11px);
+  color: var(--faint, #7f848f);
+  white-space: nowrap;
+}
+.cw-ac-outstep.is-done .cw-ac-outtag { color: var(--text); border-color: var(--cyan, #3fd8ff); }
+
+/* The moves of a line, as a list you can jump about in. */
+.cw-ac-lineply { margin: 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 4px; }
+.cw-ac-lineply button {
+  padding: 2px 8px;
+  border: 1px solid var(--line, rgba(255, 255, 255, .09));
+  border-radius: var(--radius-sm, 6px);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-sm, 12px);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+.cw-ac-lineply button.is-here {
+  border-color: var(--cyan, #3fd8ff);
+  background: color-mix(in srgb, var(--cyan, #3fd8ff) 14%, transparent);
+}
+.cw-ac-lineply button:focus-visible { outline: 2px solid var(--cyan, #3fd8ff); outline-offset: 1px; }
+
+/* A task's prompt in the standings, which puts that task back on the board. */
+.cw-ac-standgo {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  text-decoration: underline dotted;
+}
+.cw-ac-standgo:focus-visible { outline: 2px solid var(--cyan, #3fd8ff); outline-offset: 2px; }
+
+/* The lesson's own words while a task is on the board. */
+.cw-ac-aside { flex: 0 0 auto; }
+.cw-ac-aside summary { cursor: pointer; font-size: var(--text-sm, 12px); color: var(--faint, #7f848f); }
+
+/* ---------------------------------------------------------------- the lists down the left */
+
+.cw-ac-courselist,
+.cw-ac-queue { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.cw-ac-courselist header,
+.cw-ac-queue header { display: flex; flex-direction: column; gap: 2px; }
+.cw-ac-courselist h4,
+.cw-ac-queue h4 { margin: 0; }
+.cw-ac-courselist h5,
+.cw-ac-queue h5 {
+  margin: 0;
+  font-size: var(--text-xs, 11px);
+  color: var(--faint, #7f848f);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.cw-ac-courselist ol,
+.cw-ac-queue ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 2px; }
+.cw-ac-courselist section,
+.cw-ac-queue section { display: flex; flex-direction: column; gap: 4px; }
+
+.cw-ac-courserow,
+.cw-ac-queuerow {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-left: 3px solid transparent;
+  border-radius: var(--radius-sm, 6px);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-sm, 12px);
+  text-align: left;
+  cursor: pointer;
+}
+.cw-ac-courserow:hover,
+.cw-ac-queuerow:hover { background: var(--hover, rgba(255, 255, 255, .07)); }
+.cw-ac-courserow:focus-visible,
+.cw-ac-queuerow:focus-visible { outline: 2px solid var(--cyan, #3fd8ff); outline-offset: -2px; }
+.cw-ac-courserow.is-here,
+.cw-ac-queuerow.is-here {
+  border-color: var(--line-strong, rgba(255, 255, 255, .14));
+  border-left-color: var(--cyan, #3fd8ff);
+  background: color-mix(in srgb, var(--cyan, #3fd8ff) 10%, transparent);
+}
+.cw-ac-courserow.is-done { border-left-color: color-mix(in srgb, var(--cyan, #3fd8ff) 60%, transparent); }
+.cw-ac-courserow.is-skipped { border-left-style: dashed; border-left-color: var(--faint, #7f848f); }
+.cw-ac-courserow.is-waiting { color: var(--faint, #7f848f); }
+.cw-ac-courselabel,
+.cw-ac-queueprompt { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cw-ac-queuerow { flex-wrap: wrap; }
+.cw-ac-queuelesson { color: var(--faint, #7f848f); font-size: var(--text-xs, 11px); }
+.cw-ac-queuerow.is-teach { border-left-color: var(--amber, #ffbe4d); }
+.cw-ac-queuerow.is-review { border-left-color: color-mix(in srgb, var(--cyan, #3fd8ff) 60%, transparent); }
+.cw-ac-queuerow.is-fresh { border-left-color: var(--line, rgba(255, 255, 255, .09)); }

@@ -1,0 +1,350 @@
+/*
+ * The Opening Lab's own rules.
+ *
+ * Every class starts cw-ol- so nothing else in the window can reach them, or they it. Modifiers are always written
+ * against the lab's own class (.cw-ol-san.is-here, never a bare .is-here), because a bare modifier class lands on
+ * every element anywhere wearing that name.
+ *
+ * The layout question this screen has is the usual one: at a narrow width the board and the panel cannot sit side by
+ * side. It is answered with a container query against cw-screen, the Chess World screen's own container, because the
+ * window being wide says nothing about how much room is left beside the sidebar.
+ */
+
+.cw-ol {
+  display: flex;
+  gap: 20px;
+  flex: 1;
+  min-height: 0;
+  align-items: flex-start;
+}
+
+.cw-ol-boardside { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.cw-ol-under { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.cw-ol-nav { display: flex; gap: 4px; }
+.cw-ol-turn { color: var(--faint); font-size: var(--text-sm, 13px); }
+
+.cw-ol-line {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 4px;
+  max-height: 22vh;
+  overflow-y: auto;
+  font-family: var(--mono, monospace);
+  font-size: var(--text-sm, 13px);
+}
+.cw-ol-line li { display: flex; align-items: baseline; gap: 4px; }
+.cw-ol-num { color: var(--faint); }
+.cw-ol-san {
+  padding: 1px 4px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+.cw-ol-san:hover { border-color: var(--glass-border); }
+.cw-ol-san.is-here { border-color: var(--cyan); background: color-mix(in srgb, var(--cyan) 22%, transparent); }
+.cw-ol-san:focus-visible { outline: 2px solid var(--cyan); outline-offset: 1px; }
+
+.cw-ol-panel { flex: 1; min-width: 280px; max-width: 460px; display: flex; flex-direction: column; gap: 12px; min-height: 0; overflow-y: auto; }
+.cw-ol-head { display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; }
+.cw-ol-tabs, .cw-ol-sides { display: flex; gap: 4px; }
+.cw-ol-tab, .cw-ol-sidebtn {
+  padding: 4px 12px;
+  border: 1px solid var(--glass-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--faint);
+  font: inherit;
+  font-size: var(--text-sm, 13px);
+  cursor: pointer;
+}
+.cw-ol-tab[aria-selected='true'], .cw-ol-sidebtn[aria-selected='true'] {
+  color: var(--text);
+  border-color: var(--cyan);
+  background: color-mix(in srgb, var(--cyan) 14%, transparent);
+}
+.cw-ol-tab:focus-visible, .cw-ol-sidebtn:focus-visible { outline: 2px solid var(--cyan); outline-offset: 1px; }
+
+.cw-ol-pane { display: flex; flex-direction: column; gap: 12px; }
+.cw-ol-pane section { display: flex; flex-direction: column; gap: 8px; }
+.cw-ol-h { margin: 0; font-size: var(--text-sm, 13px); color: var(--faint); text-transform: uppercase; letter-spacing: 0.06em; }
+.cw-ol-faint { margin: 0; color: var(--faint); font-size: var(--text-sm, 13px); line-height: 1.5; }
+.cw-ol-row { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* The identified opening, which is the one thing on this screen somebody reads first. */
+.cw-ol-named {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 12px;
+  border: 1px solid var(--cyan);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--cyan) 8%, transparent);
+}
+.cw-ol-named.is-unknown { border-color: var(--line); background: transparent; }
+.cw-ol-name { margin: 0; font-size: var(--text-md, 15px); color: var(--text); }
+.cw-ol-eco {
+  display: inline-block;
+  padding: 1px 4px;
+  border-radius: 6px;
+  border: 1px solid var(--glass-border);
+  font-family: var(--mono, monospace);
+  font-size: var(--text-xs, 11px);
+  color: var(--faint);
+}
+
+.cw-ol-trans { font-size: var(--text-sm, 13px); color: var(--faint); }
+.cw-ol-trans summary { cursor: pointer; color: var(--text); }
+.cw-ol-trans p { margin: 4px 0 0; }
+
+.cw-ol-moves, .cw-ol-found, .cw-ol-lines, .cw-ol-history, .cw-ol-problems {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.cw-ol-moves { max-height: 34vh; overflow-y: auto; }
+.cw-ol-move {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 58px auto 1fr;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 8px;
+  border: 1px solid var(--glass-border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.cw-ol-move:hover { border-color: var(--cyan); }
+.cw-ol-move:focus-visible { outline: 2px solid var(--cyan); outline-offset: 1px; }
+.cw-ol-movesan { font-family: var(--mono, monospace); }
+.cw-ol-moveeco { font-family: var(--mono, monospace); font-size: var(--text-xs, 11px); color: var(--faint); }
+.cw-ol-movename { font-size: var(--text-sm, 13px); color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.cw-ol-found { max-height: 30vh; overflow-y: auto; }
+.cw-ol-founditem {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px 8px;
+  border: 1px solid var(--glass-border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.cw-ol-founditem:hover { border-color: var(--cyan); }
+.cw-ol-founditem small { color: var(--faint); font-family: var(--mono, monospace); font-size: var(--text-xs, 11px); }
+
+.cw-ol-source {
+  margin: 0;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+  color: var(--faint);
+  font-size: var(--text-xs, 11px);
+  line-height: 1.5;
+}
+
+.cw-ol-saverow { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; }
+.cw-ol-field { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 160px; }
+.cw-ol-label { font-size: var(--text-sm, 13px); color: var(--faint); }
+.cw-ol-hint { margin: 0; font-size: var(--text-xs, 11px); color: var(--faint); }
+.cw-ol-input {
+  width: 100%;
+  padding: 4px 8px;
+  border: 1px solid var(--glass-border);
+  border-radius: 6px;
+  background: var(--bg-mid);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-sm, 13px);
+}
+.cw-ol-input:focus-visible { outline: 2px solid var(--cyan); outline-offset: -1px; }
+
+.cw-ol-lineitem {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 8px;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+}
+.cw-ol-linetop { display: flex; gap: 8px; align-items: flex-start; }
+.cw-ol-lineopen {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.cw-ol-lineopen small { color: var(--faint); font-size: var(--text-xs, 11px); }
+.cw-ol-lineacts { display: flex; flex-wrap: wrap; gap: 4px; }
+
+.cw-ol-problems li, .cw-ol-problem {
+  margin: 0;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  color: var(--faint);
+  font-size: var(--text-sm, 13px);
+  line-height: 1.5;
+}
+
+.cw-ol-score { margin: 0; color: var(--text); font-size: var(--text-sm, 13px); }
+
+/* The answer to one move. Colour is never the only thing saying which answer it was: the words say it too. */
+.cw-ol-grade {
+  margin: 0;
+  padding: 8px 8px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  color: var(--text);
+  font-size: var(--text-sm, 13px);
+  line-height: 1.5;
+}
+.cw-ol-grade.is-right { border-color: var(--cyan); background: color-mix(in srgb, var(--cyan) 12%, transparent); }
+.cw-ol-grade.is-offbook { border-color: var(--glass-border); }
+.cw-ol-grade.is-unknown { border-style: dashed; }
+.cw-ol-grade.is-illegal { border-color: color-mix(in srgb, var(--cyan) 30%, var(--line)); border-style: dotted; }
+
+.cw-ol-history { max-height: 26vh; overflow-y: auto; font-size: var(--text-sm, 13px); }
+.cw-ol-history li {
+  display: grid;
+  grid-template-columns: 56px 1fr auto;
+  gap: 8px;
+  align-items: baseline;
+  padding: 3px 4px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+}
+.cw-ol-history li.is-right { border-color: color-mix(in srgb, var(--cyan) 40%, transparent); }
+.cw-ol-history li.is-offbook { border-color: var(--line); }
+.cw-ol-hsan { font-family: var(--mono, monospace); color: var(--text); }
+.cw-ol-hwas { color: var(--faint); }
+.cw-ol-hline { color: var(--faint); font-size: var(--text-xs, 11px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.cw-ol-note {
+  margin: 0;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+  color: var(--faint);
+  font-size: var(--text-xs, 11px);
+  line-height: 1.5;
+}
+
+/* No room for two columns: the panel goes under the board rather than squeezing it. */
+@container cw-screen (max-width: 880px) {
+  .cw-ol { flex-direction: column; }
+  .cw-ol-panel { max-width: none; width: 100%; }
+}
+
+/*
+ * ---- The Opening Lab on the shared layout
+ *
+ * The board, the move list and the panel are three columns the stage lays out, so these rules are about the strip
+ * of names above the board and about letting the panel be a column the stage sized rather than one that sizes
+ * itself. `.cw-ol`, `.cw-ol-boardside` and `.cw-ol-under` above are no longer used by the lab itself; the move list
+ * is the shared one and the board is the shared one.
+ */
+
+.cw-ol-stage .cw-ol-panel { max-width: none; overflow: visible; flex: 1 1 auto; }
+
+.cw-ol-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2, 8px);
+  padding-bottom: var(--space-1, 4px);
+}
+
+.cw-ol-turnchip { font-size: var(--text-sm, 12px); color: var(--faint, #7f848f); }
+
+.cw-ol-faintchip {
+  padding: 2px 8px;
+  border: 1px dashed var(--glass-border, rgba(160, 210, 255, 0.16));
+  border-radius: var(--radius-pill, 999px);
+  font-size: var(--text-xs, 11px);
+  color: var(--faint, #7f848f);
+}
+
+/* The names this line passed through. A row, so a line that was named four times reads as four places. */
+.cw-ol-crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; min-width: 0; }
+
+.cw-ol-crumb {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  max-width: 100%;
+  padding: 3px 10px;
+  border: 1px solid var(--glass-border, rgba(160, 210, 255, 0.16));
+  border-radius: var(--radius-pill, 999px);
+  background: transparent;
+  color: var(--faint, #7f848f);
+  font: inherit;
+  font-size: var(--text-sm, 12px);
+  cursor: pointer;
+}
+.cw-ol-crumb:hover { border-color: var(--cyan, #3fd8ff); color: var(--text, #ededef); }
+.cw-ol-crumb:focus-visible { outline: 2px solid var(--cyan, #3fd8ff); outline-offset: 1px; }
+/* Where you are is an outline and a brighter name together, never the colour on its own. */
+.cw-ol-crumb.is-here {
+  border-color: var(--cyan, #3fd8ff);
+  background: color-mix(in srgb, var(--cyan, #3fd8ff) 14%, transparent);
+  color: var(--text, #ededef);
+}
+.cw-ol-crumbname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.cw-ol-movelist { flex: 1 1 auto; min-height: 0; }
+
+.cw-ol-wide { width: auto; padding-inline: 10px; font-size: var(--text-xs, 11px); }
+
+/* Why the continuations are in the order they are in, as a mark rather than a line of body text. */
+.cw-ol-order {
+  display: inline-block;
+  margin-top: var(--space-1, 4px);
+  font-size: var(--text-xs, 11px);
+  color: var(--faint, #7f848f);
+  border-bottom: 1px dotted var(--faint, #7f848f);
+  cursor: help;
+}
+
+/* The provenance, now a disclosure: one line closed, everything it always said when opened. */
+.cw-ol-source summary {
+  font-size: var(--text-xs, 11px);
+  color: var(--faint, #7f848f);
+  cursor: pointer;
+}
+.cw-ol-source[open] summary { color: var(--text, #ededef); }
+
+/* The count under the continuations: a line of figures, not a paragraph. The dataset counts no games, so
+   there is no popularity figure here; these are only how many moves it names out of how many are legal. */
+.cw-ol-count {
+  margin: var(--space-2, 8px) 0 0;
+  font-size: var(--text-sm, 12px);
+  color: var(--text, #ededef);
+  font-variant-numeric: tabular-nums;
+}
+.cw-ol-count-rest {
+  color: var(--faint, #7f848f);
+}

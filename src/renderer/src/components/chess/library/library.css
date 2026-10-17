@@ -1,0 +1,506 @@
+/*
+ * The game library.
+ *
+ * Every class begins cw-lb- so nothing in this file can reach another screen and nothing from another screen can
+ * reach in: a stylesheet is one global namespace, and a name used twice is decided by load order rather than by
+ * anybody's intention.
+ *
+ * The root is its own container, so the rail folds away when the library is narrow -- which happens because it is
+ * narrow, not because the window is. The same component is used full width and inside a 320px panel, and a window
+ * query cannot tell those apart.
+ */
+.cw-lb {
+  container-type: inline-size;
+  container-name: cw-lb;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  /* Both zeroes are load-bearing: a flex child's floor is its content, so without them a long game name decides
+     how wide the library is and a full list decides how tall, and the list stops scrolling inside itself. */
+  min-height: 0;
+  min-width: 0;
+  flex: 1;
+}
+
+/* ---- the bar along the top */
+
+.cw-lb-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.cw-lb-bar-grow { flex: 1; min-width: 160px; }
+.cw-lb-count {
+  color: var(--faint);
+  font-size: var(--text-xs, 11px);
+  white-space: nowrap;
+}
+
+.cw-lb-sort {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.cw-lb-pick {
+  padding: 4px 8px;
+  border: 1px solid var(--glass-border);
+  border-radius: 6px;
+  background: var(--input-bg, transparent);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-sm, 13px);
+}
+.cw-lb-pick:focus-visible { outline: 2px solid var(--cyan); outline-offset: -1px; }
+
+/* ---- what is being filtered, said in words, each part removable */
+
+.cw-lb-said {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--text-xs, 11px);
+  color: var(--faint);
+}
+.cw-lb-said-one {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px 2px 8px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-pill, 999px);
+  background: color-mix(in srgb, var(--cyan) 8%, transparent);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+.cw-lb-said-one:hover { border-color: var(--cyan); }
+.cw-lb-said-one:focus-visible { outline: 2px solid var(--cyan); outline-offset: 1px; }
+
+/* ---- the body, for the two cases where there is no board to put a stage round */
+
+.cw-lb-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* ---- the filters */
+
+.cw-lb-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 8px 12px;
+  padding: 12px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md, 10px);
+  background: color-mix(in srgb, var(--bg-mid) 60%, transparent);
+}
+.cw-lb-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.cw-lb-field > label { font-size: var(--text-xs, 11px); color: var(--faint); }
+.cw-lb-input {
+  width: 100%;
+  min-width: 0;
+  padding: 4px 8px;
+  border: 1px solid var(--glass-border);
+  border-radius: 6px;
+  background: var(--input-bg, transparent);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-sm, 13px);
+}
+.cw-lb-input:focus-visible { outline: 2px solid var(--cyan); outline-offset: -1px; }
+.cw-lb-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.cw-lb-chip {
+  padding: 2px 8px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-pill, 999px);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-xs, 11px);
+  cursor: pointer;
+}
+.cw-lb-chip:hover { border-color: var(--cyan); }
+.cw-lb-chip[aria-pressed='true'] { border-color: var(--cyan); background: color-mix(in srgb, var(--cyan) 18%, transparent); }
+.cw-lb-chip:focus-visible { outline: 2px solid var(--cyan); outline-offset: 1px; }
+.cw-lb-chip-n { color: var(--faint); font-variant-numeric: tabular-nums; }
+.cw-lb-two { display: flex; gap: 4px; }
+.cw-lb-two > .cw-lb-input { flex: 1; }
+
+/* ---- the pager */
+
+.cw-lb-pager { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.cw-lb-pager-words { color: var(--faint); font-size: var(--text-xs, 11px); font-variant-numeric: tabular-nums; }
+
+/* ---- the bar that appears when something is picked */
+
+.cw-lb-picked {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 8px;
+  border: 1px solid var(--cyan);
+  border-radius: var(--radius-md, 10px);
+  background: color-mix(in srgb, var(--cyan) 12%, transparent);
+}
+.cw-lb-picked-words { font-size: var(--text-sm, 13px); }
+
+/* ---- the sheets */
+
+.cw-lb-sheet { display: flex; flex-direction: column; gap: 12px; padding: 0 16px 16px; }
+.cw-lb-sheet p { margin: 0; font-size: var(--text-sm, 13px); line-height: 1.5; }
+.cw-lb-sheet-faint { color: var(--faint); }
+.cw-lb-sheet-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 34vh;
+  overflow-y: auto;
+  font-size: var(--text-sm, 13px);
+}
+.cw-lb-sheet-row { display: flex; align-items: flex-start; gap: 8px; }
+.cw-lb-sheet-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.cw-lb-paste {
+  width: 100%;
+  min-height: 120px;
+  padding: 8px;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  background: var(--input-bg, transparent);
+  color: var(--text);
+  font-family: var(--mono, monospace);
+  font-size: var(--text-xs, 11px);
+  resize: vertical;
+}
+.cw-lb-paste:focus-visible { outline: 2px solid var(--cyan); outline-offset: -1px; }
+.cw-lb-tally { display: flex; flex-wrap: wrap; gap: 8px; }
+.cw-lb-tally-one {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 12px;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  min-width: 96px;
+}
+.cw-lb-tally-n { font-size: var(--text-lg, 18px); font-variant-numeric: tabular-nums; }
+.cw-lb-tally-what { color: var(--faint); font-size: var(--text-xs, 11px); }
+.cw-lb-bad { color: var(--red, var(--danger)); }
+.cw-lb-dup {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 12px;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+}
+.cw-lb-dup-kind { font-size: var(--text-xs, 11px); text-transform: uppercase; letter-spacing: 0.06em; color: var(--faint); }
+.cw-lb-dup.is-careful { border-color: color-mix(in srgb, var(--amber, var(--cyan)) 55%, var(--glass-border)); }
+
+
+/* ---------------------------------------------------------------------------------------------------------------
+ * The two screens over the shared stage.
+ *
+ * The board is the biggest thing on both, so the stage's own columns are widened here and nowhere else: the table
+ * needs about 380px before its eight columns stop being useful, and the stage's default left column is 200px. The
+ * board still takes everything that is left over, because the middle column is the one that grows.
+ */
+
+.cw-lb-stage.has-left.has-right { grid-template-columns: minmax(380px, 0.9fr) minmax(0, 1.4fr) minmax(240px, 0.6fr); }
+.cw-lb-left, .cw-lb-right {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  min-width: 0;
+}
+.cw-lb-right { overflow-y: auto; }
+
+/* The strip above the board: who played, when, and how it finished. Facts on one line, not a paragraph. */
+.cw-lb-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px;
+  padding-bottom: 6px;
+  font-size: var(--text-sm, 12px);
+}
+.cw-lb-strip-name { font-size: var(--text-md, 13px); }
+.cw-lb-strip-result { font-variant-numeric: tabular-nums; color: var(--text); }
+.cw-lb-faint { color: var(--faint, #7f848f); font-size: var(--text-xs, 11px); }
+.cw-lb-mono { font-family: var(--mono, monospace); font-variant-numeric: tabular-nums; }
+.cw-lb-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ---- the groups, as pills */
+
+.cw-lb-pills { display: flex; flex-wrap: wrap; gap: 4px; flex: 0 0 auto; }
+.cw-lb-pill {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 2px 8px;
+  border: 1px solid var(--glass-border, rgba(160, 210, 255, 0.16));
+  border-radius: var(--radius-pill, 999px);
+  background: transparent;
+  color: var(--text, #ededef);
+  font: inherit;
+  font-size: var(--text-xs, 11px);
+  cursor: pointer;
+}
+.cw-lb-pill:hover { border-color: var(--cyan, #3fd8ff); }
+.cw-lb-pill[aria-pressed="true"] { border-color: var(--cyan, #3fd8ff); background: color-mix(in srgb, var(--cyan, #3fd8ff) 16%, transparent); }
+.cw-lb-pill:focus-visible { outline: 2px solid var(--cyan, #3fd8ff); outline-offset: 1px; }
+.cw-lb-pill.is-collection { border-style: dashed; }
+.cw-lb-pill-n { color: var(--faint, #7f848f); font-variant-numeric: tabular-nums; }
+
+/* ---- who the numbers are about */
+
+.cw-lb-who { display: flex; align-items: center; gap: 6px; }
+.cw-lb-who-label { font-size: var(--text-xs, 11px); color: var(--faint, #7f848f); }
+
+/* ---- the table */
+
+.cw-lb-tablebox {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  border: 1px solid var(--glass-border, rgba(160, 210, 255, 0.16));
+  border-radius: var(--radius-md, 10px);
+}
+.cw-lb-table { width: 100%; border-collapse: collapse; font-size: var(--text-sm, 12px); }
+.cw-lb-table-caption { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.cw-lb-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 0;
+  text-align: left;
+  font-weight: 600;
+  background: var(--table-head, var(--surface-2, #1b1d20));
+  border-bottom: 1px solid var(--glass-border, rgba(160, 210, 255, 0.16));
+  white-space: nowrap;
+}
+.cw-lb-sortbtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 0;
+  background: transparent;
+  color: var(--text, #ededef);
+  font: inherit;
+  font-size: var(--text-xs, 11px);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+}
+.cw-lb-sortbtn:hover { color: var(--cyan, #3fd8ff); }
+.cw-lb-sortbtn:focus-visible { outline: 2px solid var(--cyan, #3fd8ff); outline-offset: -2px; }
+.cw-lb-th-pick, .cw-lb-th-star { width: 28px; }
+.cw-lb-tr { cursor: pointer; border-bottom: 1px solid color-mix(in srgb, var(--text, #ededef) 6%, transparent); }
+.cw-lb-tr:hover { background: var(--hover, rgba(255, 255, 255, 0.07)); }
+/* The row on the board is marked by a bar as well as a tint: a tint on its own is colour standing alone. */
+.cw-lb-tr.is-on { background: color-mix(in srgb, var(--cyan, #3fd8ff) 14%, transparent); box-shadow: inset 3px 0 0 var(--cyan, #3fd8ff); }
+.cw-lb-tr.is-picked td { background: color-mix(in srgb, var(--cyan, #3fd8ff) 7%, transparent); }
+.cw-lb-table td { padding: 5px 8px; vertical-align: middle; }
+.cw-lb-td-pick, .cw-lb-td-star { padding: 0 2px; text-align: center; }
+.cw-lb-td-pick input { accent-color: var(--cyan, #3fd8ff); }
+.cw-lb-td-opening, .cw-lb-td-ended, .cw-lb-td-opponent { max-width: 190px; }
+.cw-lb-cell-name, .cw-lb-cell-opening {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cw-lb-nil { color: var(--faint, #7f848f); cursor: help; }
+.cw-lb-eco { color: var(--faint, #7f848f); font-family: var(--mono, monospace); margin-right: 5px; }
+.cw-lb-star {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--faint, #7f848f);
+  cursor: pointer;
+}
+.cw-lb-star:hover { color: var(--text, #ededef); }
+.cw-lb-star.is-on { color: var(--star, var(--amber, #ffbe4d)); }
+.cw-lb-star:focus-visible { outline: 2px solid var(--cyan, #3fd8ff); outline-offset: -1px; }
+.cw-lb-colour { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+.cw-lb-disc {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 1px solid var(--line-strong, rgba(255, 255, 255, 0.14));
+  background: var(--text, #ededef);
+}
+.cw-lb-disc.is-black { background: var(--bg-edge, #000); }
+.cw-lb-outcome { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+.cw-lb-outcome-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  font: 700 var(--text-xs, 11px) / 1 var(--mono, monospace);
+  background: color-mix(in srgb, var(--faint, #7f848f) 28%, transparent);
+  color: var(--text, #ededef);
+}
+.cw-lb-outcome.is-win .cw-lb-outcome-mark { background: color-mix(in srgb, var(--green, #3ee58a) 30%, transparent); }
+.cw-lb-outcome.is-loss .cw-lb-outcome-mark { background: color-mix(in srgb, var(--red, #ff4d6d) 30%, transparent); }
+.cw-lb-outcome.is-draw .cw-lb-outcome-mark { background: color-mix(in srgb, var(--cyan, #3fd8ff) 24%, transparent); }
+
+/* ---- the card beside the board, and the numbers screen */
+
+.cw-lb-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--glass-border, rgba(160, 210, 255, 0.16));
+  border-radius: var(--radius-md, 10px);
+  background: color-mix(in srgb, var(--surface, #0e1013) 60%, transparent);
+}
+.cw-lb-card-title { margin: 0; font: 600 var(--text-md, 13px) / 1.3 var(--font, inherit); }
+.cw-lb-about { margin: 0; color: var(--faint, #7f848f); font-size: var(--text-xs, 11px); line-height: 1.45; }
+.cw-lb-gap {
+  margin: 0;
+  padding: 6px 8px;
+  border-left: 2px solid color-mix(in srgb, var(--amber, #ffbe4d) 60%, transparent);
+  color: var(--muted, #a2a6ae);
+  font-size: var(--text-xs, 11px);
+  line-height: 1.5;
+}
+.cw-lb-facts2 { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; margin: 0; font-size: var(--text-sm, 12px); }
+.cw-lb-facts2 > div { display: grid; grid-template-columns: subgrid; grid-column: 1 / -1; }
+.cw-lb-facts2 dt { color: var(--faint, #7f848f); font-size: var(--text-xs, 11px); }
+.cw-lb-facts2 dd { margin: 0; overflow: hidden; text-overflow: ellipsis; }
+.cw-lb-taglist { list-style: none; display: flex; flex-wrap: wrap; gap: 4px; margin: 0; padding: 0; }
+.cw-lb-taglist li {
+  padding: 1px 6px;
+  border: 1px solid var(--glass-border, rgba(160, 210, 255, 0.16));
+  border-radius: var(--radius-pill, 999px);
+  font-size: var(--text-xs, 11px);
+  color: var(--faint, #7f848f);
+}
+.cw-lb-taglist li.is-collection { border-style: dashed; color: var(--text, #ededef); }
+.cw-lb-cardbtns { display: flex; flex-wrap: wrap; gap: 4px; }
+
+.cw-lb-numbers {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 10px;
+  align-content: start;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+/* A result bar. Stripes mean nothing was measured, which can never be mistaken for a bar at the middle. */
+.cw-lb-bar {
+  display: flex;
+  height: 7px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--text, #ededef) 8%, transparent);
+  min-width: 48px;
+  flex: 1 1 auto;
+}
+.cw-lb-bar.is-nothing {
+  background-image: repeating-linear-gradient(135deg, color-mix(in srgb, var(--faint, #7f848f) 45%, transparent) 0 3px, transparent 3px 6px);
+}
+.cw-lb-bar-w { background: var(--green, #3ee58a); }
+.cw-lb-bar-d { background: color-mix(in srgb, var(--cyan, #3fd8ff) 70%, transparent); }
+.cw-lb-bar-l { background: var(--red, #ff4d6d); }
+
+.cw-lb-head { display: flex; align-items: center; gap: 8px; font-size: var(--text-sm, 12px); }
+.cw-lb-head-name { flex: 0 0 76px; color: var(--muted, #a2a6ae); }
+.cw-lb-head-n { flex: 0 0 34px; text-align: right; font-family: var(--mono, monospace); font-variant-numeric: tabular-nums; }
+.cw-lb-head-score { flex: 0 0 38px; text-align: right; font-family: var(--mono, monospace); }
+.cw-lb-facts { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 4px 10px; }
+.cw-lb-facts li { display: flex; justify-content: space-between; gap: 8px; font-size: var(--text-xs, 11px); color: var(--faint, #7f848f); }
+.cw-lb-facts strong { color: var(--text, #ededef); font-variant-numeric: tabular-nums; }
+
+/* The months chart. Every bar is a month that really has games in it. */
+.cw-lb-months {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 110px;
+  overflow-x: auto;
+}
+.cw-lb-month { display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 3px; height: 100%; min-width: 16px; flex: 1 1 16px; }
+.cw-lb-month-stack { display: flex; flex-direction: column-reverse; width: 100%; border-radius: 3px; overflow: hidden; }
+.cw-lb-month-w { background: var(--green, #3ee58a); }
+.cw-lb-month-d { background: color-mix(in srgb, var(--cyan, #3fd8ff) 70%, transparent); }
+.cw-lb-month-l { background: var(--red, #ff4d6d); }
+.cw-lb-month-u { background: color-mix(in srgb, var(--faint, #7f848f) 50%, transparent); }
+.cw-lb-month-name { font-size: 9px; color: var(--faint, #7f848f); font-family: var(--mono, monospace); }
+
+.cw-lb-grouptable { width: 100%; border-collapse: collapse; font-size: var(--text-xs, 11px); }
+.cw-lb-grouptable th { text-align: left; font-weight: 500; }
+.cw-lb-grouptable thead th { color: var(--faint, #7f848f); text-transform: uppercase; letter-spacing: 0.05em; padding-bottom: 3px; }
+.cw-lb-grouptable tbody th { font-weight: 400; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cw-lb-grouptable td { padding: 2px 0 2px 8px; }
+.cw-lb-wdl { display: flex; align-items: center; gap: 6px; min-width: 110px; }
+
+.cw-lb-wins { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+.cw-lb-win {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  padding: 3px 6px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text, #ededef);
+  font: inherit;
+  font-size: var(--text-sm, 12px);
+  text-align: left;
+  cursor: pointer;
+}
+.cw-lb-win:hover { border-color: var(--cyan, #3fd8ff); }
+.cw-lb-win:focus-visible { outline: 2px solid var(--cyan, #3fd8ff); outline-offset: 1px; }
+
+/* The marks the game files carried, on your own moves. */
+.cw-lb-marks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+.cw-lb-marks li { display: flex; align-items: baseline; gap: 8px; font-size: var(--text-sm, 12px); }
+.cw-lb-marks strong { margin-left: auto; font-variant-numeric: tabular-nums; }
+.cw-lb-mark {
+  flex: 0 0 26px;
+  font: 700 var(--text-sm, 12px) / 1 var(--mono, monospace);
+  color: var(--amber, #ffbe4d);
+}
+
+/* When the stage has little room it has already stacked its columns; the table keeps the full width there and
+   scrolls sideways rather than dropping a column without saying so. */
+@container cw-stage (max-width: 900px) {
+  .cw-lb-stage.has-left.has-right { grid-template-columns: minmax(0, 1fr); }
+  .cw-lb-numbers { grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
+}

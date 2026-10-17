@@ -1,0 +1,287 @@
+/*
+ * Position search and the reference-data panel.
+ *
+ * Every class begins cw-search- so that no other stylesheet in the window can reach these rules and this one cannot
+ * reach anything else. The layout asks the panel how wide it is rather than asking the window, because this sits
+ * beside a board inside a screen that is itself a column: the window can be 1600px wide while there are 520px here.
+ */
+.cw-search {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  container-type: inline-size;
+  container-name: cw-searchbox;
+}
+
+.cw-search-cols {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  min-width: 0;
+}
+.cw-search-left {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  flex: 0 1 auto;
+}
+.cw-search-right {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1 1 320px;
+  min-width: 0;
+}
+
+.cw-search-heading { margin: 0; font-size: var(--text-md, 15px); }
+.cw-search-faint { margin: 0; color: var(--faint); font-size: var(--text-sm, 13px); line-height: 1.5; }
+.cw-search-says { margin: 0; color: var(--text); font-size: var(--text-sm, 13px); line-height: 1.5; }
+
+/* A structural result, a loose rule, a warning. Marked by more than a colour: the words say it too. */
+.cw-search-caution {
+  margin: 0;
+  padding: 8px 8px;
+  border: 1px solid var(--glass-border);
+  border-left: 3px solid var(--cyan);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--cyan) 8%, transparent);
+  color: var(--text);
+  font-size: var(--text-sm, 13px);
+  line-height: 1.5;
+}
+.cw-search-note { margin: 0; color: var(--faint); font-size: var(--text-xs, 11px); line-height: 1.5; }
+.cw-search-named { margin: 0; color: var(--text); font-size: var(--text-sm, 13px); }
+
+/* ---- setting a position up */
+
+.cw-search-setup { display: flex; flex-wrap: wrap; gap: 4px; }
+
+.cw-search-fen { display: flex; flex-direction: column; gap: 4px; }
+.cw-search-fen > label { color: var(--faint); font-size: var(--text-xs, 11px); }
+.cw-search-fen-row { display: flex; gap: 4px; align-items: center; min-width: 0; }
+.cw-search-fen-input {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 8px;
+  border: 1px solid var(--glass-border);
+  border-radius: 6px;
+  background: var(--bg-mid);
+  color: var(--text);
+  font-family: var(--mono, monospace);
+  font-size: var(--text-xs, 11px);
+}
+.cw-search-fen-input:focus-visible { outline: 2px solid var(--cyan); outline-offset: -1px; }
+.cw-search-fen-input[readonly] { color: var(--faint); }
+
+/* ---- the strips of choices */
+
+.cw-search-seg {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.cw-search-seg-btn {
+  padding: 4px 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--faint);
+  font: inherit;
+  font-size: var(--text-sm, 13px);
+  cursor: pointer;
+}
+.cw-search-seg-btn:hover:not(:disabled) { color: var(--text); border-color: var(--glass-border); }
+.cw-search-seg-btn.on { color: var(--text); border-color: var(--cyan); background: color-mix(in srgb, var(--cyan) 14%, transparent); }
+.cw-search-seg-btn:focus-visible { outline: 2px solid var(--cyan); outline-offset: -2px; }
+.cw-search-seg-btn:disabled { opacity: 0.5; cursor: default; }
+
+.cw-search-run { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+
+/* ---- reading the library */
+
+.cw-search-reading { display: flex; flex-direction: column; gap: 4px; }
+.cw-search-bar {
+  display: block;
+  height: 6px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--text) 12%, transparent);
+  overflow: hidden;
+}
+.cw-search-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 6px;
+  background: var(--cyan);
+  transition: width 120ms linear;
+}
+
+/* ---- results */
+
+.cw-search-answer { display: flex; flex-direction: column; gap: 8px; }
+.cw-search-results { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.cw-search-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 8px;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+}
+.cw-search-row-main { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.cw-search-row-title { font-size: var(--text-sm, 13px); }
+.cw-search-row-sub { color: var(--faint); font-size: var(--text-xs, 11px); }
+.cw-search-plies { display: flex; flex-wrap: wrap; gap: 4px; }
+.cw-search-ply {
+  padding: 3px 8px;
+  border: 1px solid var(--glass-border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-family: var(--mono, monospace);
+  font-size: var(--text-xs, 11px);
+  cursor: pointer;
+}
+.cw-search-ply:hover:not(:disabled) { border-color: var(--cyan); }
+.cw-search-ply:focus-visible { outline: 2px solid var(--cyan); outline-offset: -1px; }
+.cw-search-ply:disabled { opacity: 0.55; cursor: default; }
+
+/* ---- material patterns */
+
+.cw-search-patterns { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.cw-search-pattern {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 8px;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.cw-search-pattern small { color: var(--faint); font-size: var(--text-xs, 11px); line-height: 1.45; }
+.cw-search-pattern:hover:not(:disabled) { border-color: var(--cyan); }
+.cw-search-pattern:focus-visible { outline: 2px solid var(--cyan); outline-offset: -1px; }
+.cw-search-pattern:disabled { opacity: 0.55; cursor: default; }
+.cw-search-pattern.on { border-color: var(--cyan); background: color-mix(in srgb, var(--cyan) 10%, transparent); }
+
+/* ---- openings in the library */
+
+.cw-search-openings {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 46vh;
+  overflow-y: auto;
+}
+.cw-search-opening {
+  width: 100%;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-sm, 13px);
+  text-align: left;
+  cursor: pointer;
+}
+.cw-search-opening:hover:not(:disabled) { border-color: var(--glass-border); }
+.cw-search-opening:focus-visible { outline: 2px solid var(--cyan); outline-offset: -1px; }
+.cw-search-opening:disabled { opacity: 0.55; cursor: default; }
+.cw-search-opening.on { border-color: var(--cyan); background: color-mix(in srgb, var(--cyan) 10%, transparent); }
+.cw-search-eco { width: 34px; flex: 0 0 auto; color: var(--faint); font-family: var(--mono, monospace); font-size: var(--text-xs, 11px); }
+.cw-search-opening-name { flex: 1; min-width: 0; }
+.cw-search-count { flex: 0 0 auto; color: var(--faint); font-variant-numeric: tabular-nums; font-size: var(--text-xs, 11px); }
+
+/* ---- the reference-data panel */
+
+.cw-search-ref { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.cw-search-ref-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.cw-search-ref-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.cw-search-ref-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 12px;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+}
+.cw-search-ref-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.cw-search-ref-says { margin: 0; color: var(--text); font-size: var(--text-sm, 13px); line-height: 1.5; }
+
+/*
+ * The state, as words with a colour behind them rather than as a colour.
+ *
+ * "Not here" and "Orbis cannot use this yet" are deliberately not red: neither of them is a fault, and a red cross
+ * beside an optional dataset tells a person their chess is broken when it is not. Only a real fault is loud.
+ */
+.cw-search-ref-state {
+  padding: 2px 8px;
+  border: 1px solid var(--glass-border);
+  border-radius: 999px;
+  color: var(--faint);
+  font-size: var(--text-xs, 11px);
+  white-space: nowrap;
+}
+.cw-search-ref-state[data-state='present'] { color: var(--text); border-color: var(--cyan); background: color-mix(in srgb, var(--cyan) 14%, transparent); }
+.cw-search-ref-state[data-state='installing'] { color: var(--text); border-color: var(--cyan); }
+.cw-search-ref-state[data-state='broken'] { color: var(--text); border-color: color-mix(in srgb, red 55%, var(--line)); }
+.cw-search-ref-fault {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, red 18%, transparent);
+  color: var(--text);
+  font-size: var(--text-xs, 11px);
+}
+
+.cw-search-ref-facts { margin: 0; display: flex; flex-direction: column; gap: 3px; }
+.cw-search-ref-facts > div { display: flex; gap: 8px; align-items: baseline; }
+.cw-search-ref-facts dt { flex: 0 0 120px; color: var(--faint); font-size: var(--text-xs, 11px); }
+.cw-search-ref-facts dd { margin: 0; flex: 1; min-width: 0; font-size: var(--text-xs, 11px); line-height: 1.5; }
+.cw-search-url { color: var(--faint); font-family: var(--mono, monospace); word-break: break-all; }
+
+.cw-search-ref-without ul { margin: 3px 0 0; padding-left: 16px; display: flex; flex-direction: column; gap: 2px; }
+.cw-search-ref-without li { color: var(--text); font-size: var(--text-xs, 11px); line-height: 1.5; }
+
+/* A narrow panel stacks the search under the board rather than squeezing the board out of shape. */
+@container cw-searchbox (max-width: 760px) {
+  .cw-search-cols { flex-direction: column; }
+  .cw-search-left { width: 100%; }
+  .cw-search-right { flex-basis: auto; width: 100%; }
+}
+
+/*
+ * The board stops growing before it fills the screen.
+ *
+ * A board is `min(72vh, 100%)` wide and square, so once the column it is in is narrower than 72vh the width wins
+ * and the board becomes as tall as the screen is wide. Stacked at 600px that came to 580x580 in an area 586x630:
+ * the board was the entire first screenful and every one of the seventy-nine controls -- which side is to move, the
+ * material, the opening, the button that actually runs the search -- was below the fold with nothing on screen
+ * saying so. 420px leaves room for the first of them, which is what tells somebody there is more.
+ *
+ * Written against the board inside this screen rather than against `.cw-board` on its own: a bare class would
+ * land on every board in the window, and `cssCollisions.test.ts` is the thing that makes that a rule.
+ */
+@container cw-screen (max-width: 760px) {
+  .cw-search-left .cw-board { width: min(72vh, 100%, 420px); }
+}
+@container cw-searchbox (max-width: 420px) {
+  .cw-search-ref-facts > div { flex-direction: column; gap: 0; }
+  .cw-search-ref-facts dt { flex-basis: auto; }
+}

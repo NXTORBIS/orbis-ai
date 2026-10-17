@@ -1,0 +1,202 @@
+/*
+ * The layout every area shares, and the move list.
+ *
+ * Every class starts cw- so no other stylesheet can reach it. The colours are the window's own design tokens, each
+ * written with a fallback, because a wrong token name fails silently and leaves white text on white.
+ *
+ * The arrangement is a grid of up to three columns with the board in the middle. It is sized with container
+ * queries rather than media queries: the stage sits beside the Chess World rail and sometimes beside a panel of
+ * its own, so what matters is how much room the stage has, not how wide the window is.
+ */
+
+.cw-stage {
+  container-type: inline-size;
+  container-name: cw-stage;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-4, 16px);
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  padding: var(--space-3, 12px) var(--space-4, 16px) var(--space-4, 16px);
+  overflow: hidden;
+}
+
+/*
+ * The column widths.
+ *
+ * The middle column is `minmax(0, 1fr)` and the columns beside it are given a range, which is what makes the board
+ * take the room that is left rather than the other way round. The right column has a floor of 240px because a move
+ * list narrower than that wraps "Qxd5+" onto two lines, and a ceiling of 360px because past that it is taking
+ * width off the board for nothing.
+ */
+.cw-stage.has-right { grid-template-columns: minmax(0, 1fr) minmax(240px, 0.34fr); }
+.cw-stage.has-left { grid-template-columns: minmax(200px, 0.28fr) minmax(0, 1fr); }
+.cw-stage.has-left.has-right {
+  grid-template-columns: minmax(180px, 0.24fr) minmax(0, 1fr) minmax(240px, 0.32fr);
+}
+
+.cw-stage-mid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2, 8px);
+  min-width: 0;
+  min-height: 0;
+}
+
+/*
+ * The box the board is measured against.
+ *
+ * `min-height: 0` is what makes the measurement mean anything: without it a flex child is at least as tall as its
+ * content, the content is the board, and the board would be asking the box how big it is while the box was asking
+ * the board. With it, the box is whatever height is left over and the board is told to be that big.
+ */
+.cw-stage-slot {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  display: grid;
+  place-items: center;
+}
+
+.cw-stage-above, .cw-stage-below { flex: 0 0 auto; min-height: 0; }
+.cw-stage-tight { flex: 0 0 auto; margin: 0; font-size: var(--text-sm, 12px); color: var(--amber, #ffbe4d); }
+
+.cw-stage-left, .cw-stage-right {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3, 12px);
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/*
+ * Narrow: the columns go under the board rather than squeezing it.
+ *
+ * This is the opposite of what the old screens did. They kept the panels beside the board and let the board
+ * collapse, which is why it ended up 357 pixels wide. The board is the thing this program is about, so when there
+ * is not room for three columns the panels move and the board keeps the width.
+ */
+@container cw-stage (max-width: 900px) {
+  .cw-stage, .cw-stage.has-left, .cw-stage.has-right, .cw-stage.has-left.has-right {
+    grid-template-columns: minmax(0, 1fr);
+    overflow-y: auto;
+  }
+  .cw-stage-left, .cw-stage-right { overflow: visible; max-height: none; }
+  /* The board keeps a sensible share of a short window rather than filling it and pushing the panels off. */
+  .cw-stage-slot { min-height: min(72vh, 92vw); }
+}
+
+/* ---------------------------------------------------------------- the move list */
+
+.cw-ml {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border: 1px solid var(--glass-border, rgba(160, 210, 255, 0.16));
+  border-radius: var(--radius-md, 10px);
+  background: var(--glass, rgba(14, 15, 18, 0.84));
+  overflow: hidden;
+}
+
+.cw-ml-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-1, 4px);
+}
+.cw-ml-scroll:focus-visible { outline: 2px solid var(--cyan, #3fd8ff); outline-offset: -2px; }
+
+/* A row is a number and two moves, and the two move cells are the same width so the columns line up down the list. */
+.cw-ml-row {
+  display: grid;
+  grid-template-columns: 2.6em minmax(0, 1fr) minmax(0, 1fr);
+  align-items: stretch;
+  gap: 2px;
+}
+.cw-ml-row:nth-child(odd) { background: color-mix(in srgb, var(--text, #ededef) 3%, transparent); }
+
+.cw-ml-num {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 6px;
+  font: var(--text-xs, 11px) / 1.6 var(--mono, monospace);
+  color: var(--faint, #7f848f);
+  font-variant-numeric: tabular-nums;
+}
+
+.cw-ml-move {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 6px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm, 6px);
+  background: none;
+  color: var(--text, #ededef);
+  font: 500 var(--text-md, 13px) / 1.5 var(--font, sans-serif);
+  text-align: left;
+  cursor: pointer;
+}
+.cw-ml-move:disabled { cursor: default; }
+.cw-ml-move:hover:not(:disabled) { background: color-mix(in srgb, var(--cyan, #3fd8ff) 10%, transparent); }
+.cw-ml-move:focus-visible { outline: 2px solid var(--cyan, #3fd8ff); outline-offset: -2px; }
+
+/* Where you are. A fill and a bar, not a colour alone: the bar is what says it without the colour. */
+.cw-ml-move.is-here {
+  background: color-mix(in srgb, var(--cyan, #3fd8ff) 18%, transparent);
+  border-color: color-mix(in srgb, var(--cyan, #3fd8ff) 55%, transparent);
+  font-weight: 700;
+  box-shadow: inset 2px 0 0 var(--cyan, #3fd8ff);
+}
+
+.cw-ml-san { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cw-ml-blank { display: block; color: var(--faint, #7f848f); padding: 3px 6px; }
+
+/*
+ * The mark beside a move.
+ *
+ * Only ever drawn from something the area really measured. The colours are the window's status tokens, and the
+ * symbol is drawn as well as the colour -- the whole point of a symbol is that it reads without the colour.
+ */
+.cw-ml-note { font: 700 var(--text-xs, 11px) / 1 var(--mono, monospace); flex: 0 0 auto; }
+.cw-ml-note.is-best, .cw-ml-note.is-brilliant, .cw-ml-note.is-great { color: var(--green, #3ee58a); }
+.cw-ml-note.is-excellent, .cw-ml-note.is-good { color: var(--cyan, #3fd8ff); }
+.cw-ml-note.is-inaccuracy { color: var(--amber, #ffbe4d); }
+.cw-ml-note.is-mistake { color: color-mix(in srgb, var(--amber, #ffbe4d) 60%, var(--red, #ff4d6d)); }
+.cw-ml-note.is-blunder, .cw-ml-note.is-missed-mate { color: var(--red, #ff4d6d); }
+.cw-ml-note.is-book { color: var(--faint, #7f848f); }
+
+.cw-ml-empty { margin: 0; padding: var(--space-3, 12px); font-size: var(--text-sm, 12px); color: var(--faint, #7f848f); }
+
+.cw-ml-place {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 4px 8px;
+  border-top: 1px solid var(--line, rgba(255, 255, 255, 0.09));
+  font-size: var(--text-xs, 11px);
+  color: var(--faint, #7f848f);
+}
+
+/* ---------------------------------------------------------------- walking the game */
+
+.cw-nav { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+
+.cw-nav-btn {
+  display: grid;
+  place-items: center;
+  min-width: 34px;
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--glass-border, rgba(160, 210, 255, 0.16));
+  border-radius: var(--radius-sm, 6px);
+  background: color-mix(in srgb, var(--text, #ededef) 5%, transparent);
+  color: var(--text, #ededef);
+  font: var(--text-md, 13px) / 1 var(--font, sans-serif);
+  cursor: pointer;
+}
+.cw-nav-btn:hover:not(:disabled) { border-color: var(--cyan, #3fd8ff); }
+.cw-nav-btn:focus-visible { outline: 2px solid var(--cyan, #3fd8ff); outline-offset: 1px; }
+.cw-nav-btn:disabled { opacity: 0.45; cursor: default; }

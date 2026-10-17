@@ -1,0 +1,678 @@
+/*
+ * Puzzle Universe's own stylesheet.
+ *
+ * Every class starts cw-pz- so no other stylesheet in the window can reach these rules, or them it. The layout is
+ * decided by a container query against cw-screen -- the chess screen's own container -- and never by the width of
+ * the window, because the screen sits beside a sidebar and the window's width says nothing about how wide the
+ * screen actually is.
+ */
+
+.cw-pz {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+/* ---------------------------------------------------------------- things that have gone wrong */
+
+.cw-pz-warn {
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--cyan);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--cyan) 7%, transparent);
+  color: var(--text);
+  font-size: var(--text-sm, 13px);
+  line-height: 1.5;
+}
+
+.cw-pz-why {
+  margin: 4px 0 0;
+  color: var(--text);
+  font-size: var(--text-sm, 13px);
+  line-height: 1.5;
+}
+
+.cw-pz-whynot {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: var(--text-sm, 13px);
+  color: var(--faint);
+}
+.cw-pz-whynot > summary { cursor: pointer; color: var(--text); }
+.cw-pz-whynot ul { margin: 8px 0 0; padding-left: 16px; line-height: 1.6; }
+
+/* ---------------------------------------------------------------- the top */
+
+.cw-pz-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+}
+
+.cw-pz-standing { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+
+.cw-pz-rating {
+  margin: 0;
+  color: var(--text);
+  font-size: var(--text-md, 15px);
+  font-weight: 600;
+}
+
+.cw-pz-streak {
+  margin: 0;
+  color: var(--text);
+  font-size: var(--text-sm, 13px);
+  padding: 4px 8px;
+  border: 1px solid var(--glass-border, var(--line));
+  border-radius: 999px;
+  background: var(--bg-mid);
+}
+
+.cw-pz-faint {
+  margin: 0;
+  color: var(--faint);
+  font-size: var(--text-sm, 13px);
+  line-height: 1.55;
+}
+
+.cw-pz-link {
+  align-self: flex-start;
+  /* A line of text is about nine pixels tall, so three pixels either side made this a fourteen-pixel-high thing to
+     hit. One more pixel each way costs nothing to look at and gives it a target somebody can actually press. */
+  padding: 4px 0;
+  min-height: 17px;
+  border: 0;
+  background: none;
+  color: var(--cyan);
+  font: inherit;
+  font-size: var(--text-sm, 13px);
+  cursor: pointer;
+  text-decoration: underline;
+}
+.cw-pz-link:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; border-radius: 6px; }
+
+.cw-pz-model {
+  margin-top: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg-mid);
+  color: var(--faint);
+  font-size: var(--text-sm, 13px);
+  line-height: 1.6;
+  max-width: 62ch;
+}
+.cw-pz-model p { margin: 0 0 4px; color: var(--text); }
+.cw-pz-model h5 { margin: 8px 0 4px; font-size: var(--text-sm, 13px); color: var(--text); }
+.cw-pz-model ol,
+.cw-pz-model ul { margin: 0; padding-left: 16px; }
+
+/* ---------------------------------------------------------------- tabs */
+
+.cw-pz-tabs { display: flex; flex-wrap: wrap; gap: 4px; }
+
+.cw-pz-tab {
+  padding: 4px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--faint);
+  font: inherit;
+  font-size: var(--text-sm, 13px);
+  cursor: pointer;
+}
+.cw-pz-tab[aria-pressed='true'],
+.cw-pz-tab[aria-selected='true'] {
+  color: var(--text);
+  border-color: var(--cyan);
+  background: color-mix(in srgb, var(--cyan) 12%, transparent);
+}
+.cw-pz-tab:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+
+.cw-pz-pane { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.cw-pz-pane.is-board { flex: 1 1 auto; min-height: 0; }
+.cw-pz-pane h3 { margin: 0; font-size: var(--text-md, 15px); color: var(--text); }
+.cw-pz-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+
+/* ---------------------------------------------------------------- nothing here yet */
+
+.cw-pz-none {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+  max-width: 64ch;
+  padding: 16px 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg-mid);
+}
+.cw-pz-none h3 { margin: 0; font-size: var(--text-md, 15px); color: var(--text); }
+.cw-pz-none p { margin: 0; color: var(--text); font-size: var(--text-sm, 13px); line-height: 1.6; }
+
+/* ---------------------------------------------------------------- filters and lists */
+
+.cw-pz-filters { display: flex; flex-direction: column; gap: 8px; }
+.cw-pz-chips { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.cw-pz-showing { margin: 0; color: var(--faint); font-size: var(--text-sm, 13px); }
+
+.cw-pz-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+
+.cw-pz-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.cw-pz-item:hover { border-color: var(--cyan); }
+.cw-pz-item:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+.cw-pz-item > strong { font-weight: 600; font-size: var(--text-sm, 13px); }
+.cw-pz-item > small { color: var(--faint); font-size: var(--text-xs, 12px); }
+
+.cw-pz-says {
+  margin: 0;
+  color: var(--text);
+  font-size: var(--text-sm, 13px);
+  line-height: 1.55;
+}
+
+/* ---------------------------------------------------------------- the solver */
+
+/*
+ * The solver and the run both hand their board to ChessStage, which measures the room and sizes the board. So
+ * there is no board column here any more: the only thing this stylesheet says about the stage is that it may have
+ * all the height going, which is what makes the board the biggest thing on the screen.
+ */
+.cw-pz-stage { flex: 1 1 auto; min-height: 0; }
+
+/* The column beside the board scrolls on its own, so a long report after a solve never shrinks the board. */
+.cw-pz-side {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* What is being asked, across the top of the board where a player looks first. */
+.cw-pz-asking {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  align-items: baseline;
+  min-width: 0;
+}
+
+.cw-pz-turn { margin: 0; color: var(--faint); font-size: var(--text-xs, 12px); }
+
+.cw-pz-ask {
+  margin: 0;
+  color: var(--text);
+  font-size: var(--text-md, 15px);
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.cw-pz-where { margin: 0; color: var(--faint); font-size: var(--text-xs, 12px); }
+
+.cw-pz-note {
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg-mid);
+  color: var(--text);
+  font-size: var(--text-sm, 13px);
+  line-height: 1.55;
+  min-height: 2.6em;
+}
+/* An illegal move and a wrong move are different things, and they do not look the same. */
+.cw-pz-note.is-illegal { border-left-color: color-mix(in srgb, var(--faint) 70%, var(--text)); }
+.cw-pz-note.is-wrong { border-left-color: #d98a3c; }
+.cw-pz-note.is-ok { border-left-color: var(--cyan); }
+.cw-pz-note.is-solved { border-left-color: #4cc38a; }
+.cw-pz-note.is-gap { border-left-color: #d98a3c; }
+.cw-pz-note.is-over { border-left-color: var(--line); }
+
+.cw-pz-typed { display: flex; flex-direction: column; gap: 4px; }
+.cw-pz-typed > label { color: var(--faint); font-size: var(--text-xs, 12px); }
+.cw-pz-typed-row { display: flex; gap: 4px; align-items: center; }
+
+.cw-pz-input {
+  flex: 0 1 8em;
+  min-width: 5em;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg-mid);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-sm, 13px);
+}
+.cw-pz-input:focus-visible { outline: 2px solid var(--cyan); outline-offset: -1px; }
+
+.cw-pz-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  color: var(--faint);
+  font-size: var(--text-xs, 12px);
+}
+
+.cw-pz-hints {
+  margin: 0;
+  padding-left: 16px;
+  color: var(--text);
+  font-size: var(--text-sm, 13px);
+  line-height: 1.6;
+}
+
+.cw-pz-after {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg-mid);
+}
+.cw-pz-after h5 { margin: 0 0 4px; font-size: var(--text-sm, 13px); color: var(--text); }
+.cw-pz-after ul,
+.cw-pz-after ol { margin: 0; padding-left: 16px; color: var(--faint); font-size: var(--text-sm, 13px); line-height: 1.6; }
+
+.cw-pz-done { margin: 0; font-size: var(--text-md, 15px); color: #4cc38a; }
+.cw-pz-missed { margin: 0; font-size: var(--text-md, 15px); color: #d98a3c; }
+
+.cw-pz-answer { min-width: 0; }
+.cw-pz-linelist { margin: 0; padding-left: 16px; list-style: none; }
+.cw-pz-linelist code {
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: var(--text-sm, 13px);
+  color: var(--text);
+}
+
+.cw-pz-lesson {
+  margin: 0;
+  color: var(--text);
+  font-size: var(--text-sm, 13px);
+  line-height: 1.6;
+}
+
+.cw-pz-check { margin: 0; color: var(--faint); font-size: var(--text-xs, 12px); line-height: 1.55; }
+
+.cw-pz-problems {
+  margin: 0;
+  padding-left: 16px;
+  color: var(--faint);
+  font-size: var(--text-xs, 12px);
+  line-height: 1.6;
+}
+
+.cw-pz-themes { min-width: 0; }
+/* What somebody said about a puzzle is set back from what Orbis checked, because it is worth less. */
+.cw-pz-themes.is-said { opacity: 0.78; border-top: 1px dashed var(--line); padding-top: 8px; }
+
+.cw-pz-difficulty { min-width: 0; }
+
+/* ---------------------------------------------------------------- making puzzles */
+
+.cw-pz-maker { display: flex; flex-direction: column; gap: 12px; min-width: 0; max-width: 72ch; }
+.cw-pz-maker h3 { margin: 0; font-size: var(--text-md, 15px); color: var(--text); }
+
+.cw-pz-pick { display: flex; flex-direction: column; gap: 4px; }
+.cw-pz-pick > span { color: var(--faint); font-size: var(--text-xs, 12px); }
+
+.cw-pz-select {
+  padding: 8px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg-mid);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-sm, 13px);
+  max-width: 100%;
+}
+.cw-pz-select:focus-visible { outline: 2px solid var(--cyan); outline-offset: -1px; }
+
+.cw-pz-routes,
+.cw-pz-depths { display: flex; flex-wrap: wrap; gap: 4px; }
+
+.cw-pz-route,
+.cw-pz-depth {
+  padding: 4px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--faint);
+  font: inherit;
+  font-size: var(--text-sm, 13px);
+  cursor: pointer;
+}
+.cw-pz-route[aria-pressed='true'],
+.cw-pz-depth[aria-pressed='true'] {
+  color: var(--text);
+  border-color: var(--cyan);
+  background: color-mix(in srgb, var(--cyan) 12%, transparent);
+}
+.cw-pz-route:disabled,
+.cw-pz-depth:disabled { opacity: 0.5; cursor: not-allowed; }
+.cw-pz-route:focus-visible,
+.cw-pz-depth:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+
+.cw-pz-progress { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; color: var(--faint); font-size: var(--text-sm, 13px); }
+.cw-pz-progress progress { flex: 0 1 220px; height: 8px; }
+
+.cw-pz-found { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+
+.cw-pz-madelist { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
+
+.cw-pz-made {
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg-mid);
+}
+
+.cw-pz-made-pick {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  color: var(--text);
+  font-size: var(--text-sm, 13px);
+  line-height: 1.5;
+  cursor: pointer;
+}
+.cw-pz-made-pick input { margin-top: 3px; flex: 0 0 auto; }
+
+/* ---------------------------------------------------------------- the bottom */
+
+.cw-pz-foot { padding-top: 8px; border-top: 1px solid var(--line); }
+
+/*
+ * Narrow: the board and what is said about it go one above the other.
+ *
+ * The question asked is how wide the *screen* is, not the window. At 596px beside a sidebar a window query would
+ * still think there was room for two columns.
+ */
+@container cw-screen (max-width: 520px) {
+  .cw-pz-head { flex-direction: column; }
+  .cw-pz-streak { align-self: stretch; text-align: center; }
+}
+
+/* ---------------------------------------------------------------- the run against the clock */
+
+.cw-pz-rush { display: flex; flex-direction: column; gap: 12px; min-width: 0; min-height: 0; flex: 1 1 auto; }
+.cw-pz-rush h3 { margin: 0; font-size: var(--text-md, 15px); color: var(--text); }
+.cw-pz-rush h4 { margin: 0 0 4px; font-size: var(--text-sm, 13px); color: var(--text); }
+.cw-pz-rush p { margin: 0; font-size: var(--text-sm, 13px); line-height: 1.6; color: var(--text); }
+
+.cw-pz-rush-modes { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.cw-pz-rush-mode {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1 1 200px;
+  min-width: 0;
+  padding: 12px 12px;
+  text-align: left;
+  background: var(--panel, rgba(255, 255, 255, 0.04));
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.cw-pz-rush-mode:hover { border-color: var(--cyan); }
+.cw-pz-rush-mode:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+.cw-pz-rush-mode > strong { font-size: var(--text-md, 15px); font-weight: 600; }
+.cw-pz-rush-mode > span { color: var(--text); font-size: var(--text-sm, 13px); line-height: 1.55; }
+.cw-pz-rush-mode > small { color: var(--faint); font-size: var(--text-xs, 12px); }
+
+.cw-pz-rush-climb {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  min-width: 0;
+}
+
+.cw-pz-rush-shortof,
+.cw-pz-rush-weights {
+  margin: 0;
+  padding-left: 16px;
+  color: var(--faint);
+  font-size: var(--text-sm, 13px);
+  line-height: 1.6;
+}
+
+.cw-pz-rush-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: baseline;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  min-width: 0;
+}
+
+.cw-pz-rush-clock {
+  font-size: var(--text-lg, 18px);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  min-width: 4ch;
+}
+
+.cw-pz-rush-solved {
+  font-size: var(--text-lg, 18px);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--cyan);
+}
+
+.cw-pz-rush-lives { display: inline-flex; gap: 3px; letter-spacing: 1px; }
+.cw-pz-rush-lives .is-left { color: #4cc38a; }
+.cw-pz-rush-lives .is-gone { color: var(--faint); }
+
+.cw-pz-rush-score {
+  margin: 0;
+  font-size: 44px;
+  line-height: 1.1;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--cyan);
+}
+
+.cw-pz-rush-results {
+  margin: 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  color: var(--text);
+  font-size: var(--text-sm, 13px);
+  min-width: 0;
+}
+
+.cw-pz-rush-results > li.is-solved > strong { color: #4cc38a; }
+.cw-pz-rush-results > li.is-missed > strong { color: #d98a3c; }
+.cw-pz-rush-results > li > small { color: var(--faint); font-size: var(--text-xs, 12px); }
+
+/* ---------------------------------------------------------------- the last seven days */
+
+.cw-pz-days {
+  display: flex;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  align-items: center;
+}
+
+.cw-pz-days > li {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  line-height: 1;
+}
+
+.cw-pz-days > li > small { color: var(--faint); font-size: var(--text-xs, 12px); }
+.cw-pz-days > li.is-done > span { color: #4cc38a; }
+.cw-pz-days > li.is-missed > span { color: #d98a3c; }
+/* A day nothing was chosen on. Deliberately the quietest mark here: it is not a failure. */
+.cw-pz-days > li.is-nothing > span { color: var(--faint); opacity: 0.6; }
+
+/* ---------------------------------------------------------------- the shelves, by what a puzzle is about */
+
+.cw-pz-headright { display: flex; flex-direction: column; gap: 2px; align-items: flex-end; min-width: 0; }
+
+.cw-pz-themes-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* The whole collection in five figures. A tally, not a sentence. */
+.cw-pz-tally {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+}
+
+.cw-pz-tally > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1 1 110px;
+  min-width: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--glass-border, rgba(160, 210, 255, 0.16));
+  border-radius: var(--radius-md, 10px);
+  background: var(--glass, rgba(14, 15, 18, 0.84));
+}
+
+.cw-pz-tally dt { color: var(--faint); font-size: var(--text-xs, 11px); }
+.cw-pz-tally dd {
+  margin: 0;
+  color: var(--text);
+  font-size: var(--text-xl, 18px);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.cw-pz-shelves {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cw-pz-shelf {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--glass-border, rgba(160, 210, 255, 0.16));
+  border-radius: var(--radius-md, 10px);
+  background: var(--glass, rgba(14, 15, 18, 0.84));
+}
+
+.cw-pz-shelf-top { display: flex; gap: 8px; align-items: baseline; justify-content: space-between; min-width: 0; }
+.cw-pz-shelf-name { font-size: var(--text-md, 13px); font-weight: 600; color: var(--text); }
+.cw-pz-shelf-total {
+  color: var(--faint);
+  font-size: var(--text-sm, 12px);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The bar is one of three ways the same thing is said, never the only one. */
+.cw-pz-shelf-bar {
+  height: 6px;
+  border-radius: var(--radius-pill, 999px);
+  background: var(--hover, rgba(255, 255, 255, 0.07));
+  overflow: hidden;
+}
+
+.cw-pz-shelf-fill {
+  display: block;
+  height: 100%;
+  background: var(--cyan, #3fd8ff);
+}
+
+.cw-pz-shelf-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--faint);
+  font-size: var(--text-xs, 11px);
+}
+
+.cw-pz-shelf-counts b { color: var(--text); font-variant-numeric: tabular-nums; }
+.cw-pz-shelf-counts > li.is-solved b { color: #4cc38a; }
+.cw-pz-shelf-counts > li.is-missed b { color: #d98a3c; }
+
+.cw-pz-shelf-strength { margin: 0; font-size: var(--text-xs, 11px); color: var(--text); }
+/* Nothing is concluded from too few goes, and it is drawn as the quieter line it is. */
+.cw-pz-shelf-strength.is-not-enough { color: var(--faint); }
+
+.cw-pz-shelf-proof { margin: 0; font-size: var(--text-xs, 11px); color: var(--faint); line-height: 1.5; }
+
+.cw-pz-shelf-row { display: flex; flex-wrap: wrap; gap: 4px; margin-top: auto; }
+
+/* ---------------------------------------------------------------- a list with the board beside it */
+
+/*
+ * A list of puzzles is drawn beside the big board, which shows the picked puzzle's start position. The stage owns
+ * the board's size, so this only lets the listing take the height it is given.
+ */
+.cw-pz-listing { flex: 1 1 auto; min-height: 0; }
+
+/* The name of the puzzle being previewed, across the top of the board. */
+.cw-pz-preview-name { margin: 0; }
+
+/* The row the board is showing. Shown by a border and by aria-pressed, never by colour alone. */
+.cw-pz-item.is-picked { border-color: var(--cyan); border-left-width: 3px; }

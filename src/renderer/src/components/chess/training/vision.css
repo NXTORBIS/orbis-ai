@@ -1,0 +1,370 @@
+/*
+ * Vision: the coordinate trainer.
+ *
+ * Everything here starts `cw-vi-`, so no other stylesheet can reach it and it can reach nothing else. A stylesheet
+ * is one global namespace and a duplicate class name is silent -- `src/shared/cssCollisions.test.ts` is what makes
+ * that a rule rather than a habit. In particular the board here is `cw-vi-board` / `cw-vi-rank` / `cw-vi-sq` and
+ * not the real board's `cw-board` / `cw-rank` / `cw-sq`: it is a different thing, eight by eight and empty, and
+ * sharing those names would have the two boards redefining each other.
+ *
+ * Widths come from a container query on `cw-screen`, Chess World's own container, never from the window. Beside the
+ * chat sidebar this screen is about 600px wide while the window is 1600.
+ *
+ * ## The one rule worth saying in a stylesheet
+ *
+ * **There is no rule in here that hides a piece.** Not `display: none`, not a visibility, not an opacity, not a
+ * colour that happens to match the square. A round with the pieces turned off has no piece in the markup at all,
+ * which is decided in `vision.ts` by asking `trainingView.ts`. A piece hidden by CSS is still in the document, in
+ * the accessibility tree and in a screenshot of the window.
+ */
+
+.cw-vi {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  gap: 16px;
+  padding: 4px 0 16px;
+}
+
+.cw-vi-side {
+  flex: 0 0 236px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+  padding-right: 8px;
+  border-right: 1px solid var(--line);
+}
+
+.cw-vi-main {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  /*
+   * Not `overflow-y: auto`. The board is measured against the height this column has, and a column that scrolls
+   * has as much height as its content wants -- so the measurement would be of a box the board had just made
+   * taller, and the two would chase each other. The panels beside it scroll instead.
+   */
+  overflow: hidden;
+}
+
+/* ---------------------------------------------------------------- the settings down the side */
+
+.cw-vi-asks {
+  margin: 0;
+  font-size: var(--text-sm, 13px);
+  line-height: 1.45;
+  color: var(--text);
+}
+
+.cw-vi-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.cw-vi-field-name {
+  font-size: var(--text-xs, 11px);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.cw-vi-field-note {
+  margin: 0;
+  font-size: var(--text-xs, 11px);
+  line-height: 1.4;
+  color: var(--faint);
+}
+
+.cw-vi-seg {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.cw-vi-tab {
+  flex: 1 1 auto;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm, 6px);
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-xs, 11px);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.cw-vi-tab:hover { background: color-mix(in srgb, var(--cyan) 7%, transparent); }
+.cw-vi-tab:focus-visible { outline: 2px solid var(--cyan); outline-offset: -2px; }
+.cw-vi-tab.on {
+  border-color: var(--cyan);
+  background: color-mix(in srgb, var(--cyan) 14%, transparent);
+  color: var(--text);
+}
+
+.cw-vi-toggles { display: flex; flex-wrap: wrap; gap: 4px; }
+
+.cw-vi-warn {
+  margin: 0;
+  padding: 8px 8px;
+  border: 1px solid color-mix(in srgb, #e0b341 45%, var(--line));
+  border-radius: var(--radius-sm, 6px);
+  font-size: var(--text-xs, 11px);
+  line-height: 1.45;
+  color: var(--text);
+  background: color-mix(in srgb, #e0b341 8%, transparent);
+}
+
+.cw-vi-pass,
+.cw-vi-best {
+  margin: 0;
+  font-size: var(--text-xs, 11px);
+  line-height: 1.45;
+  color: var(--faint);
+}
+.cw-vi-best { color: var(--text); }
+
+.cw-vi-past { font-size: var(--text-xs, 11px); color: var(--faint); }
+.cw-vi-past summary { cursor: pointer; }
+.cw-vi-past ul { margin: 4px 0 0; padding-left: 16px; line-height: 1.5; }
+
+/* ---------------------------------------------------------------- what is being asked */
+
+.cw-vi-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.cw-vi-ask {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0;
+  min-height: 42px;
+}
+
+.cw-vi-ask-label {
+  font-size: var(--text-xs, 11px);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.cw-vi-ask-square {
+  font-size: 30px;
+  line-height: 1;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--cyan);
+}
+
+.cw-vi-dials { display: flex; gap: 12px; }
+
+.cw-vi-dial { display: flex; flex-direction: column; gap: 1px; }
+
+.cw-vi-dial-name {
+  font-size: var(--text-xs, 11px);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.cw-vi-dial-value {
+  font-size: var(--text-md, 15px);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+/* ---------------------------------------------------------------- the board of squares */
+
+/*
+ * The board takes the room that is left, and that is the whole fix.
+ *
+ * It was `max-width: 460px` over a grid at `width: 100%`, and the box it was inside was shrink-to-fit, so the
+ * percentage resolved against whatever text happened to sit under it. The board is now given a pixel size measured
+ * off this box by `boardRoom.ts`, which uses the same `boardSize` every other board in Chess World uses, so this
+ * grid is as large as the room allows and grows with the window.
+ */
+.cw-vi-boardwrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  display: grid;
+  place-items: center;
+}
+
+.cw-vi-board {
+  container-type: inline-size;
+  container-name: cw-vi-board;
+  display: grid;
+  grid-template-rows: repeat(8, 1fr);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm, 6px);
+  overflow: hidden;
+}
+
+.cw-vi-boardnotes {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.cw-vi-readout { font-size: var(--text-xs, 11px); color: var(--faint); }
+.cw-vi-readout summary { cursor: pointer; }
+
+.cw-vi-rank { display: grid; grid-template-columns: repeat(8, 1fr); }
+
+.cw-vi-sq {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: default;
+}
+.cw-vi-sq.light { background: var(--cw-light, #b9c6d4); }
+.cw-vi-sq.dark { background: var(--cw-dark, #4f6076); }
+
+.cw-vi-board.is-live .cw-vi-sq { cursor: pointer; }
+.cw-vi-board.is-live .cw-vi-sq:hover { box-shadow: inset 0 0 0 3px color-mix(in srgb, var(--cyan) 65%, transparent); }
+.cw-vi-sq:focus-visible { outline: 2px solid var(--cyan); outline-offset: -3px; z-index: 1; }
+
+.cw-vi-sq.is-asked { box-shadow: inset 0 0 0 4px var(--cw-mark, #e0b341); }
+
+.cw-vi-name {
+  /* In the board's own width, so a label on a big board is big. A flat pixel size was a 10px speck at any size. */
+  font-size: clamp(9px, 2.6cqw, 22px);
+  font-weight: 600;
+  color: color-mix(in srgb, #0b0f14 70%, transparent);
+}
+
+.cw-vi-piece { width: 78%; height: 78%; pointer-events: none; }
+
+.cw-vi-why {
+  margin: 0;
+  font-size: var(--text-xs, 11px);
+  line-height: 1.45;
+  color: var(--faint);
+}
+
+/* ---------------------------------------------------------------- typing a name */
+
+.cw-vi-type { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+
+.cw-vi-type label {
+  font-size: var(--text-xs, 11px);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.cw-vi-input {
+  width: 84px;
+  padding: 8px 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm, 6px);
+  background: var(--panel, transparent);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-md, 15px);
+  text-align: center;
+  letter-spacing: 0.08em;
+}
+.cw-vi-input:focus-visible { outline: 2px solid var(--cyan); outline-offset: -1px; }
+
+.cw-vi-type-note {
+  flex: 1 1 180px;
+  font-size: var(--text-xs, 11px);
+  line-height: 1.4;
+  color: var(--faint);
+}
+
+/* ---------------------------------------------------------------- how it went */
+
+.cw-vi-mark {
+  margin: 0;
+  padding: 8px 8px;
+  border-radius: var(--radius-sm, 6px);
+  border: 1px solid var(--line);
+  font-size: var(--text-sm, 13px);
+  line-height: 1.45;
+}
+.cw-vi-mark.is-right {
+  border-color: color-mix(in srgb, var(--cyan) 45%, var(--line));
+  background: color-mix(in srgb, var(--cyan) 9%, transparent);
+}
+.cw-vi-mark.is-wrong {
+  border-color: color-mix(in srgb, #c2576a 45%, var(--line));
+  background: color-mix(in srgb, #c2576a 9%, transparent);
+}
+
+.cw-vi-controls { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.cw-vi-report {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm, 6px);
+}
+
+.cw-vi-report-head { margin: 0; font-size: var(--text-md, 15px); font-weight: 600; }
+
+.cw-vi-figures { display: flex; flex-wrap: wrap; gap: 16px; margin: 0; }
+.cw-vi-figures div { display: flex; flex-direction: column; gap: 1px; }
+.cw-vi-figures dt {
+  font-size: var(--text-xs, 11px);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+.cw-vi-figures dd {
+  margin: 0;
+  font-size: var(--text-sm, 13px);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.cw-vi-says {
+  margin: 0;
+  padding-left: 16px;
+  font-size: var(--text-xs, 11px);
+  line-height: 1.55;
+  color: var(--faint);
+}
+
+.cw-vi-missed { font-size: var(--text-xs, 11px); color: var(--faint); }
+.cw-vi-missed summary { cursor: pointer; }
+.cw-vi-missed ul { margin: 4px 0 0; padding-left: 16px; line-height: 1.5; }
+
+/* ---------------------------------------------------------------- narrow: the panel, not the window */
+
+@container cw-screen (max-width: 720px) {
+  .cw-vi { flex-direction: column; }
+  .cw-vi-side {
+    flex: 0 0 auto;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+    padding: 0 0 12px;
+    overflow: visible;
+  }
+  .cw-vi-boardwrap { max-width: none; }
+}

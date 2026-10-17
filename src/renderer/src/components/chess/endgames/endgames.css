@@ -1,0 +1,251 @@
+/*
+ * The Endgame Lab.
+ *
+ * This file was missing. `EndgameLab.tsx` imported `./endgames.css` and no such file existed, which TypeScript
+ * cannot see -- it does not resolve a stylesheet import -- so the screen typechecked and the production build
+ * refused to bundle at all. Every other folder in Chess World had its stylesheet; this was the only one without,
+ * and the screen had never been opened, so nobody had noticed either half of it.
+ *
+ * Every class starts cw-en- so nothing else in the window can reach into this screen and this screen cannot reach
+ * anything else. The guard in src/shared/cssCollisions.test.ts fails if any of these names is defined twice.
+ *
+ * Widths come from a container query on cw-screen, the Chess World screen's own container, never from the window
+ * width: this sits beside a rail and sometimes beside the chat sidebar, so what the window measures is not what
+ * this is.
+ *
+ * The one rule here that is about meaning rather than looks: a claim Orbis has *proved* and a claim it could not
+ * prove must not look the same, and neither of them may look like an error. Proved is the accent, unproved is
+ * amber and reads as "nobody has shown this", and red is kept for something actually being wrong.
+ */
+
+.cw-en-lab {
+  display: flex;
+  gap: 16px;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+
+/* ---- the list of endings */
+
+.cw-en-side {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex: 0 0 248px;
+  min-width: 0;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.cw-en-filter { display: flex; flex-wrap: wrap; gap: 4px; }
+.cw-en-level {
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: none;
+  color: var(--faint);
+  font: inherit;
+  font-size: var(--text-xs, 11px);
+  cursor: pointer;
+}
+.cw-en-level:hover { color: var(--text); border-color: var(--cyan); }
+.cw-en-level:focus-visible { outline: 2px solid var(--cyan); outline-offset: 1px; }
+.cw-en-level[aria-pressed='true'] {
+  color: var(--text);
+  border-color: var(--cyan);
+  background: color-mix(in srgb, var(--cyan) 14%, transparent);
+}
+
+.cw-en-group { display: flex; flex-direction: column; gap: 4px; }
+.cw-en-theme {
+  margin: 0;
+  font-size: var(--text-xs, 11px);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+.cw-en-items { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+.cw-en-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 8px 8px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm, 6px);
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.cw-en-item strong { font-size: var(--text-sm, 13px); font-weight: 500; }
+.cw-en-item small { color: var(--faint); font-size: var(--text-xs, 11px); }
+.cw-en-item:hover { border-color: var(--cyan); }
+.cw-en-item:focus-visible { outline: 2px solid var(--cyan); outline-offset: -2px; }
+.cw-en-item.cw-en-on {
+  border-color: var(--cyan);
+  background: color-mix(in srgb, var(--cyan) 12%, transparent);
+}
+.cw-en-item.cw-en-on strong { font-weight: 600; }
+
+/* ---- the ending being played */
+
+.cw-en-play { display: flex; flex-direction: column; gap: 12px; flex: 1; min-width: 0; }
+.cw-en-head { display: flex; flex-direction: column; gap: 4px; }
+.cw-en-title { margin: 0; font-size: var(--text-md, 15px); }
+.cw-en-meta {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  color: var(--faint);
+  font-size: var(--text-xs, 11px);
+}
+
+/* How the claim about this ending was established. Two different things, so two different badges. */
+.cw-en-badge {
+  padding: 2px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: var(--text-xs, 11px);
+}
+.cw-en-searched {
+  border-color: var(--cyan);
+  color: var(--cyan);
+  background: color-mix(in srgb, var(--cyan) 10%, transparent);
+}
+.cw-en-checked {
+  border-color: var(--amber);
+  color: var(--amber);
+  background: color-mix(in srgb, var(--amber) 10%, transparent);
+}
+
+/* What you are trying to do. It is a status line, so it must stand out from the prose around it. */
+.cw-en-aim {
+  margin: 0;
+  padding: 8px 8px;
+  border: 1px solid var(--glass-border);
+  border-left: 2px solid var(--cyan);
+  border-radius: var(--radius-sm, 6px);
+  background: var(--bg-mid);
+  font-size: var(--text-sm, 13px);
+}
+
+.cw-en-table { display: flex; gap: 12px; align-items: flex-start; min-width: 0; }
+.cw-en-aside {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+/* ---- how the attempt is going */
+
+.cw-en-state { margin: 0; font-size: var(--text-sm, 13px); font-weight: 600; }
+.cw-en-going { color: var(--text); }
+.cw-en-done { color: var(--green, var(--cyan)); }
+/* Losing an attempt is not a fault, and must not be dressed as one. */
+.cw-en-gone { color: var(--amber); }
+.cw-en-slipnote { margin: 0; color: var(--faint); font-size: var(--text-xs, 11px); }
+
+.cw-en-count { margin: 0; color: var(--faint); font-size: var(--text-xs, 11px); }
+.cw-en-controls { display: flex; flex-wrap: wrap; gap: 4px; }
+.cw-en-hint {
+  margin: 0;
+  padding: 8px 8px;
+  border: 1px solid color-mix(in srgb, var(--amber) 40%, var(--line));
+  border-radius: var(--radius-sm, 6px);
+  color: var(--text);
+  font-size: var(--text-xs, 11px);
+}
+
+/* ---- what has been played */
+
+.cw-en-moves {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-height: 210px;
+  overflow-y: auto;
+}
+.cw-en-moves li {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 3px 4px;
+  border-radius: 6px;
+  font-size: var(--text-xs, 11px);
+}
+.cw-en-mine { background: color-mix(in srgb, var(--cyan) 8%, transparent); }
+.cw-en-theirs { color: var(--faint); }
+.cw-en-san { font-variant-numeric: tabular-nums; font-weight: 600; }
+.cw-en-why { color: var(--faint); text-align: right; }
+
+.cw-en-said {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  color: var(--faint);
+  font-size: var(--text-xs, 11px);
+}
+
+/* ---- the notes under the board */
+
+.cw-en-notes { display: flex; flex-direction: column; gap: 8px; }
+.cw-en-method { margin: 0; font-size: var(--text-sm, 13px); }
+.cw-en-more { font-size: var(--text-xs, 11px); }
+.cw-en-more summary { cursor: pointer; color: var(--cyan); }
+.cw-en-more summary:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+.cw-en-more > *:not(summary) { margin: 4px 0 0; }
+.cw-en-proof { color: var(--text); }
+.cw-en-prov { color: var(--faint); font-style: italic; }
+.cw-en-faint { color: var(--faint); }
+.cw-en-rules { margin: 4px 0 0; padding-left: 16px; color: var(--faint); display: flex; flex-direction: column; gap: 3px; }
+
+/* ---- the result of recomputing the ending's own claim */
+
+.cw-en-check {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 8px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm, 6px);
+  background: var(--bg-mid);
+  font-size: var(--text-xs, 11px);
+}
+.cw-en-check ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+.cw-en-check p { margin: 0; }
+.cw-en-ok { color: var(--cyan); font-weight: 600; }
+/* Something is wrong with the ending itself. This is the only red on the screen. */
+.cw-en-bad { color: var(--red, var(--danger)); font-weight: 600; }
+/* Not disproved -- not proved. A search that ran out of budget says so, and it is not a failure. */
+.cw-en-unproved { color: var(--amber); }
+
+/*
+ * Beside the rail, and again beside the chat sidebar, there is not room for two columns.
+ *
+ * The list was capped at 220px, which is three endings of a list of about thirty, with the fourth sliced through
+ * the middle of its own name and three hundred empty pixels in the pane under it. 42vh shows seven, and the
+ * snapping stops a row being cut in half -- a row cut in half reads as broken rather than as scrollable.
+ */
+@container cw-screen (max-width: 900px) {
+  .cw-en-lab { flex-direction: column; }
+  .cw-en-side { flex: 0 0 auto; max-height: 42vh; scroll-snap-type: y proximity; }
+  .cw-en-item { scroll-snap-align: start; }
+  .cw-en-filter { position: sticky; top: 0; background: var(--bg-mid); padding-bottom: 4px; }
+}
+@container cw-screen (max-width: 680px) {
+  .cw-en-table { flex-direction: column; }
+}

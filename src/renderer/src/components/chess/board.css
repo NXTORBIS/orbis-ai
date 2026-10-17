@@ -1,11 +1,33 @@
 /* The board. Every class here starts cw- so it cannot collide with another screen's stylesheet. */
-.cw-board-wrap { position: relative; display: inline-block; max-width: 100%; }
+
+/*
+ * How wide the board is, which was the worst fault on these screens.
+ *
+ * The wrapper used to be `display: inline-block`, which is shrink-to-fit: the board's `width: min(72vh, 100%)`
+ * resolved its percentage against a box whose own width had come from whatever text happened to sit under the
+ * board. It measured 357px on every screen, at every window size. A chess program with a 357px board is a page of
+ * text with a diagram on it.
+ *
+ * There are two honest ways to size a board and both are here:
+ *
+ *   - **Measured.** `ChessStage` measures the space the board has with a resize observer and `Board` is given a
+ *     pixel size, which it puts on the board itself. The wrapper is then `fit-content`, so it is exactly as wide
+ *     as the board plus the strip beside it, and centred. This is what every area should use.
+ *   - **Filling.** A board given no size fills the width of its parent, capped so it cannot grow taller than the
+ *     window. Not as good -- it cannot use spare height -- but it is a real board in a real column, which is
+ *     what the areas that have not moved to the stage yet get.
+ */
+.cw-board-wrap { position: relative; display: block; width: 100%; max-width: 100%; }
+.cw-board-wrap.is-sized { width: fit-content; max-width: 100%; margin-inline: auto; }
 
 .cw-board {
   display: grid;
   grid-template-rows: repeat(8, 1fr);
-  width: min(72vh, 100%);
+  width: min(100%, var(--cw-board-max, 72vh));
+  margin-inline: auto;
   aspect-ratio: 1;
+  /* The arrow layer is taken out of the flow against this box, so it covers exactly the squares and adds no row. */
+  position: relative;
   border: 1px solid var(--glass-border);
   border-radius: 10px;
   overflow: hidden;
@@ -27,18 +49,52 @@
   line-height: 1;
 }
 .cw-sq:disabled { cursor: default; }
-.cw-sq.light { background: #b9c6d4; }
-.cw-sq.dark { background: #4f6076; }
+.cw-board { container-type: inline-size; }
 
-/* The piece is drawn as a character, with an outline so a white piece stays visible on a light square. */
+/*
+ * The squares. The colours come from the board theme when one has been chosen -- `chessSettings.css` declares every
+ * theme's variables on `:root[data-cw-board='…']` -- and from the fallbacks here when none has. That is why every
+ * var() below carries a second value: a window where the settings have never been read still draws a board.
+ */
+.cw-sq.light { background: var(--cw-light, #b9c6d4); }
+.cw-sq.dark { background: var(--cw-dark, #4f6076); }
+
+/*
+ * The piece is a drawing now rather than a letter from the chess alphabet; `pieces.tsx` says why, and why it is
+ * drawn by hand rather than taken from one of the well-known sets.
+ *
+ * `--cw-wp`/`--cw-bp` are the piece colours and `--cw-we`/`--cw-be` the line round them, and all four already
+ * existed for every theme -- a drawn piece needs exactly the edge colour the themes were already carrying. The
+ * outline is what keeps a white piece visible on a pale square and a black one on a dark square, so it is never
+ * the same colour as the piece it surrounds.
+ */
 .cw-piece {
-  font-size: clamp(18px, 7cqw, 46px);
+  width: 86%;
+  height: 86%;
   user-select: none;
   pointer-events: none;
+  /* A piece lifts very slightly off its square. Without it a board reads as a printed diagram. */
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.28));
 }
-.cw-board { container-type: inline-size; }
-.cw-piece.w { color: #fff; text-shadow: 0 0 1px #0b0d10, 0 1px 2px rgba(0, 0, 0, 0.6); }
-.cw-piece.b { color: #10161d; text-shadow: 0 0 1px rgba(255, 255, 255, 0.35); }
+.cw-pc-w { color: var(--cw-wp, #ffffff); --cw-pc-line: var(--cw-we, #04070b); }
+.cw-pc-b { color: var(--cw-bp, #101822); --cw-pc-line: var(--cw-be, #dfe7f0); }
+
+/* Picked up: the piece grows a little, so what you are holding is obvious without colour alone saying it. */
+.cw-sq.is-selected .cw-piece { transform: scale(1.07); transition: transform 90ms ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  .cw-sq.is-selected .cw-piece { transition: none; }
+}
+
+/* How heavily a piece is outlined, which is what `board.pieces` has always meant. The weights live in `pieces.tsx`
+   as stroke widths; these only decide whether the piece is lifted off the square at all. */
+:root[data-cw-pieces='flat'] .cw-piece { filter: none; }
+:root[data-cw-pieces='bold'] .cw-piece { filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.42)); }
+
+/* How much of the square a piece fills. */
+:root[data-cw-piece-size='small'] .cw-piece { width: 74%; height: 74%; }
+:root[data-cw-piece-size='large'] .cw-piece { width: 95%; height: 95%; }
+
+.cw-promo-piece { width: 34px; height: 34px; }
 
 /* State is never colour alone: a ring, a dot or a corner mark says it too. */
 .cw-sq.is-last::after {
@@ -58,20 +114,38 @@
   background: color-mix(in srgb, var(--cyan) 70%, transparent);
   pointer-events: none;
 }
-.cw-sq.is-target { box-shadow: inset 0 0 0 4px color-mix(in srgb, var(--cyan) 70%, transparent); }
+/*
+ * A piece that can be taken gets a ring round it rather than a filled square: the square is where the piece is,
+ * and filling it would hide the piece you are deciding whether to take.
+ */
+.cw-sq.is-target::before {
+  content: '';
+  position: absolute;
+  inset: 4%;
+  border-radius: 50%;
+  border: 0.9cqw solid color-mix(in srgb, var(--cyan) 72%, transparent);
+  pointer-events: none;
+}
 .cw-sq.is-check { background: #8d3b45; }
 .cw-sq.is-marked { box-shadow: inset 0 0 0 3px #e0b341; }
 .cw-sq.is-cursor { outline: 2px dashed var(--cyan); outline-offset: -4px; }
 
+/*
+ * The coordinates, drawn at a size that follows the board.
+ *
+ * They were a flat 10px, which is readable on a 357px board and a speck on a 900px one. `cqw` is a share of the
+ * board's own width -- the board is the container -- so they grow with it, with a floor and a ceiling so they
+ * neither disappear on a small board nor shout on a large one.
+ */
 .cw-coord {
   position: absolute;
-  font-size: 9px;
-  font-family: var(--mono, monospace);
-  color: rgba(255, 255, 255, 0.75);
+  font: 600 clamp(9px, 1.5cqw, 15px)/1 var(--mono, monospace);
+  color: var(--cw-coord, rgba(255, 255, 255, 0.72));
   pointer-events: none;
 }
-.cw-coord.rank { top: 2px; left: 3px; }
-.cw-coord.file { bottom: 2px; right: 3px; }
+.cw-coord.rank { top: 4%; left: 5%; }
+.cw-coord.file { bottom: 3%; right: 6%; }
+:root[data-cw-coords='off'] .cw-coord { display: none; }
 
 /* Choosing what a pawn becomes. It sits over the board and has to be answered. */
 .cw-promo {
@@ -81,19 +155,19 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 8px;
   background: rgba(8, 11, 15, 0.86);
   backdrop-filter: blur(3px);
   border-radius: 10px;
 }
 .cw-promo p { margin: 0; color: var(--text); }
-.cw-promo-row { display: flex; gap: 10px; }
+.cw-promo-row { display: flex; gap: 8px; }
 .cw-promo-btn {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 2px;
-  padding: 10px 14px;
+  padding: 8px 12px;
   border: 1px solid var(--glass-border);
   border-radius: 10px;
   background: transparent;
@@ -114,4 +188,292 @@
 
 @media (prefers-reduced-motion: no-preference) {
   .cw-sq { transition: box-shadow 0.12s ease; }
+}
+
+/* ---------------------------------------------------------------- a piece on its way to its square */
+
+/*
+ * The slide.
+ *
+ * `Board.tsx` puts the piece in this wrapper for the length of one move and sets where it is coming from, in
+ * squares, on `--cw-dx` and `--cw-dy`. The wrapper fills the square exactly, so the piece inside is drawn at the
+ * size it always is -- which is the reason the animation is not on the piece itself.
+ *
+ * The distance is in `cqw`, container-query units of the board's own width, because the board is the container
+ * (`container-type: inline-size` above) and one square is an eighth of it: 12.5cqw. Pixels would need the board's
+ * size, which nothing here knows, and percentages measure the piece rather than the square.
+ *
+ * All of it is inside a reduced-motion query, so a machine that has asked for less movement gets a piece that
+ * appears on its square -- which is exactly what the board did before any of this existed, and is never wrong,
+ * only plainer.
+ */
+.cw-slider {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .cw-slider { animation: cw-slide var(--cw-slide, 140ms) ease-out; }
+}
+
+@keyframes cw-slide {
+  from { transform: translate(calc(var(--cw-dx, 0) * 12.5cqw), calc(var(--cw-dy, 0) * 12.5cqw)); }
+  to { transform: translate(0, 0); }
+}
+
+/* ---------------------------------------------------------------- the king in check, said twice */
+
+/*
+ * The square under a checked king is a red background and nothing else, which Section 275 names outright: the
+ * difference between board states must not be colour alone. So the square also carries the mark chess has always
+ * used for check. It is hidden with the colour when somebody turns the check mark off, because one setting should
+ * not leave half of itself on the screen.
+ */
+.cw-check-badge {
+  position: absolute;
+  top: 0;
+  right: 2px;
+  font: 700 clamp(9px, 2.6cqw, 17px)/1 var(--mono, monospace);
+  color: #ffffff;
+  text-shadow: 0 0 2px #000000, 0 0 3px #000000;
+  pointer-events: none;
+}
+:root[data-cw-checkmark='off'] .cw-check-badge { display: none; }
+
+/* ---------------------------------------------------------------- arrows and coloured squares */
+
+/*
+ * What somebody draws on the board.
+ *
+ * Four colours, and each one is also a *pattern* -- solid, dashed, dotted, dash and dot -- for the same reason the
+ * check mark above is a shape as well as a colour. Two of the five board themes pair a red mark with green squares;
+ * telling a red arrow from a green one by hue alone is exactly the thing Section 275 says not to rely on.
+ *
+ * The colours are written here rather than taken from the board theme on purpose: a mark is the person's own
+ * annotation, and it has to stand out from the board rather than belong to it.
+ */
+.cw-board-wrap {
+  --cw-ink-green: #4e9a3e;
+  --cw-ink-red: #c43c2f;
+  --cw-ink-blue: #2f7fd0;
+  --cw-ink-yellow: #d8a521;
+}
+
+/*
+ * On a board that can be drawn on, a disabled square stops swallowing the pointer.
+ *
+ * The squares of a board nobody is playing -- a finished game, a broadcast -- are disabled buttons, and a disabled
+ * control is not handed a mouse event at all: the event stops there and never reaches the board. Since the board
+ * works out which square a drawing is on from where the pointer is rather than from what it landed on, letting the
+ * event through is all that is needed for arrows to work on a position you are only looking at.
+ */
+.cw-board.can-draw .cw-sq:disabled { pointer-events: none; }
+
+.cw-drawn-arrows {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  overflow: visible;
+}
+
+/* The shaft is a polyline now, because a knight's arrow bends at the corner it really turns at. `round` on the
+   join is what keeps that corner from coming to a point. A touch thicker than it was: at board size the old
+   stroke read as a hairline. */
+.cw-arrow polyline {
+  stroke-width: 0.15;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.92;
+}
+.cw-arrow polygon { opacity: 0.92; }
+
+.cw-arrow.is-green polyline, .cw-arrow.is-green polygon { stroke: var(--cw-ink-green, #4e9a3e); fill: var(--cw-ink-green, #4e9a3e); }
+.cw-arrow.is-red polyline, .cw-arrow.is-red polygon { stroke: var(--cw-ink-red, #c43c2f); fill: var(--cw-ink-red, #c43c2f); }
+.cw-arrow.is-blue polyline, .cw-arrow.is-blue polygon { stroke: var(--cw-ink-blue, #2f7fd0); fill: var(--cw-ink-blue, #2f7fd0); }
+.cw-arrow.is-yellow polyline, .cw-arrow.is-yellow polygon { stroke: var(--cw-ink-yellow, #d8a521); fill: var(--cw-ink-yellow, #d8a521); }
+
+/* The pattern, in squares like everything else in that layer. The head stays solid: it is what says which way. */
+.cw-arrow.is-red polyline { stroke-dasharray: 0.3 0.16; }
+.cw-arrow.is-blue polyline { stroke-dasharray: 0.02 0.17; }
+.cw-arrow.is-yellow polyline { stroke-dasharray: 0.3 0.12 0.03 0.12; }
+
+/* A coloured square: a ring inside the square, in the colour and in its own border style. */
+.cw-drawn-sq, .cw-drawn-start {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.cw-drawn-sq.is-green { border: 4px solid var(--cw-ink-green, #4e9a3e); }
+.cw-drawn-sq.is-red { border: 4px dashed var(--cw-ink-red, #c43c2f); }
+.cw-drawn-sq.is-blue { border: 4px dotted var(--cw-ink-blue, #2f7fd0); }
+.cw-drawn-sq.is-yellow { border: 4px double var(--cw-ink-yellow, #d8a521); }
+
+/* The square an arrow has been started from with the keyboard, waiting for the square it points at. */
+.cw-drawn-start {
+  border: 3px dashed var(--cyan);
+  border-radius: 6px;
+  opacity: 0.9;
+}
+
+/*
+ * The line under the board.
+ *
+ * It appears only on a board that can be drawn on, and only when there is something to say: what is drawn, a
+ * half-finished arrow waiting for its second square, or a refusal. It is the only way a keyboard reaches any of
+ * this -- the arrows themselves are a picture, and a picture says nothing.
+ */
+.cw-board-note {
+  margin: 4px 0 0;
+  flex-basis: 100%;
+  font-size: var(--text-sm, 12px);
+  color: var(--faint);
+}
+
+/* ---------------------------------------------------------------- the bar beside the board */
+
+/*
+ * The evaluation strip.
+ *
+ * Drawn only when a screen hands the board a score, which is how somebody turning "the bar beside the board" off
+ * actually turns it off. The two sides of it are the piece colours of the board theme rather than theme text
+ * colours: White's share of the bar is the colour White's pieces are, which is true in every theme and in a light
+ * window, and `--text` would be the wrong way round in one of them.
+ *
+ * `evalBar.ts` decides what it says. What matters here is the state it draws for a position nothing has been
+ * calculated for: stripes and a dash, with no fill at all. A strip filled to the middle would be the board telling
+ * somebody the engine had looked and found it level.
+ */
+/*
+ * The strip and the board, side by side.
+ *
+ * The board stays exactly where it was -- the first child of the wrapper, with the width rule it has always had --
+ * and the strip is taken out of the flow beside it, in padding left for it. Nothing else survives contact with
+ * that width rule, and this was measured rather than reasoned about. The board's width is `min(72vh, 100%)`, and
+ * that percentage is resolved against a box which is itself being sized by what is inside it, so putting the board
+ * one level further down collapses it:
+ *
+ *   - a wrapping flex row put the board on a second line and straight on top of the strip, which had shrunk back
+ *     to its own minimum height because nothing was beside it to stretch to any more;
+ *   - an inline grid with an automatic column left the board 160px wide, and 3px wide on a board with no line of
+ *     text under it;
+ *   - a flex row, and then a plain block row, collapsed it exactly the same way -- the board ended up as wide as
+ *     whatever text happened to be under it, because that was the only thing left telling the wrapper how wide to
+ *     be. The same board, as a direct child, measures 357px every time.
+ *
+ * Which leaves the strip's height. It cannot come from the wrapper -- the wrapper is as tall as the board *and*
+ * the line of words under it -- and a bar 4% taller than the board it belongs to is a bar reading 4% wrong. So the
+ * board is measured and the strip is given its height. It is the one number in this stylesheet that comes from the
+ * window rather than from CSS, and `Board.tsx` says why.
+ */
+/*
+ * 30 for the strip and 8 beside it. The strip was 14 first, and a probe of this stylesheet showed "+1.24" being
+ * clipped to "+1." in it -- the number is the half of the bar anybody can actually read, so the strip is as wide as
+ * the number needs rather than as narrow as it looks good.
+ */
+.cw-board-wrap.has-eval { padding-left: 36px; }
+
+.cw-board-eval {
+  position: absolute;
+  left: 0;
+  top: 0;
+  /* Until the board has been measured once. A board that has never been laid out has no height to copy. */
+  bottom: 0;
+  width: 30px;
+  overflow: hidden;
+  border: 1px solid var(--glass-border);
+  border-radius: 6px;
+  background: var(--cw-wp, #ffffff);
+}
+.cw-board-eval-top {
+  position: absolute;
+  inset: 0 0 auto 0;
+  display: block;
+  background: var(--cw-bp, #101822);
+}
+/* Turned round with the board, so whoever is at the bottom of the board has the bottom of the bar. */
+.cw-board-eval.flipped { background: var(--cw-bp, #101822); }
+.cw-board-eval.flipped .cw-board-eval-top { background: var(--cw-wp, #ffffff); }
+
+@media (prefers-reduced-motion: no-preference) {
+  .cw-board-eval-top { transition: height 140ms ease; }
+}
+
+/* Nothing calculated: a pattern rather than a fill, so it cannot be mistaken for a position being level. */
+.cw-board-eval.is-unknown {
+  background:
+    repeating-linear-gradient(45deg, var(--glass-border) 0 2px, transparent 2px 6px),
+    var(--bg-mid, #141a22);
+}
+
+/*
+ * The number, in a band of its own at the top of the strip.
+ *
+ * It has its own background rather than sitting on the fill, because the fill moves: a number that is readable at
+ * +1.24 would be dark on dark at -1.24. And it wraps rather than being cut off -- the text it is given is whatever
+ * form this person reads scores in, which is "mate in 3" as often as it is "+1.24".
+ */
+.cw-board-eval-text {
+  position: absolute;
+  inset: 0 0 auto 0;
+  padding: 2px 1px;
+  text-align: center;
+  font-family: var(--mono, monospace);
+  /* 9, not 10: at 10 the four characters of "+1.24" are a pixel too wide for the strip and it breaks across two
+     lines. Measured, with the number in it. */
+  font-size: 10px;
+  line-height: 1.15;
+  overflow-wrap: break-word;
+  color: #f2f6fa;
+  background: rgba(8, 11, 15, 0.74);
+}
+
+
+/* ---------------------------------------------------------------- carrying a piece, and holding a move */
+
+/*
+ * A piece being dragged.
+ *
+ * It is placed where the pointer is as a share of the board rather than in pixels, so it follows the pointer at
+ * any board size and this stylesheet needs to know nothing about how big the board is. It is lifted and shadowed,
+ * because the one thing a dragged piece has to say is "this is in your hand and not on the board yet". It takes no
+ * pointer events, so the square under the pointer is still the square the pointer is over.
+ */
+.cw-carried {
+  position: absolute;
+  width: 12.5%;
+  height: 12.5%;
+  margin: -6.25% 0 0 -6.25%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 3;
+  transform: scale(1.12);
+  filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.45));
+}
+/* While a piece is in your hand the cursor says so, on every square. */
+.cw-board.is-lifting .cw-sq { cursor: grabbing; }
+
+/* The square the carried piece is over. A ring inside the square, so it reads under the piece in your hand. */
+.cw-sq.is-over { box-shadow: inset 0 0 0 0.75cqw var(--cyan); }
+
+/*
+ * A move held for your turn.
+ *
+ * Drawn differently from the last move on purpose: a held move has not happened. It is a dashed outline in the
+ * accent rather than a wash over the square, so nobody can read it as a move that was played. The line under the
+ * board says it in words as well, because an outline is not readable by somebody who cannot see it.
+ */
+.cw-sq.is-premove::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 0.6cqw dashed color-mix(in srgb, var(--cyan) 78%, transparent);
+  background: color-mix(in srgb, var(--cyan) 10%, transparent);
+  pointer-events: none;
 }

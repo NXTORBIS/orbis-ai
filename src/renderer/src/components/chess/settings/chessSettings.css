@@ -1,0 +1,431 @@
+/*
+ * Chess World's settings, and the rules that make a board setting reach a board.
+ *
+ * ## Why the board rules are written from outside
+ *
+ * `board.css` paints a square with a fixed colour and `Board.tsx` takes no prop for it. Neither file belongs to
+ * this area, and copying the board to restyle it would mean two boards that slowly disagree. So the settings are
+ * applied the way the window's own theme is applied: a data attribute on the document element, and rules that
+ * select on it. `:root[data-cw-board='walnut'] .cw-sq.light` is four class-level selectors against the board's
+ * own two, so it wins wherever it is loaded from, on every board in the window at once -- the real board on the
+ * Study screen as much as the small one in this panel.
+ *
+ * Nothing here defines a bare `:root` block: every custom property is declared on a `:root` already carrying one
+ * of these attributes, so a window with the settings never loaded is the board exactly as `board.css` draws it.
+ * Every var() carries a fallback for the same reason.
+ *
+ * ## Colours
+ *
+ * The square and piece colours below are the same values as `BOARD_THEMES` in `src/shared/chess/settings.ts`,
+ * which is the authority. They are duplicated here because CSS cannot read a TypeScript constant -- and because
+ * duplication is only safe when something checks it, `settings.test.ts` reads this file back and fails if one of
+ * them has drifted. The same test checks that every piece, or its outline, stands far enough from both square
+ * colours to be seen.
+ *
+ * Every class of this panel's own starts `cw-cfg-`, so no other stylesheet in the window can reach it or it them.
+ */
+
+/* ---------------------------------------------------------------- the five boards */
+
+:root[data-cw-board='slate'] {
+  --cw-light: #b9c6d4;
+  --cw-dark: #4f6076;
+  --cw-wp: #ffffff;
+  --cw-we: #04070b;
+  --cw-bp: #101822;
+  --cw-be: #dfe7f0;
+  --cw-mark: #e0b341;
+  --cw-check: #8d3b45;
+  --cw-coord-light: #0c121a;
+  --cw-coord-dark: #eef3f8;
+}
+:root[data-cw-board='walnut'] {
+  --cw-light: #e3c89f;
+  --cw-dark: #8a5a3b;
+  --cw-wp: #fdf7ec;
+  --cw-we: #150c04;
+  --cw-bp: #231408;
+  --cw-be: #f3e2cc;
+  --cw-mark: #2f7fd0;
+  --cw-check: #a0382c;
+  --cw-coord-light: #201206;
+  --cw-coord-dark: #fff6e8;
+}
+:root[data-cw-board='forest'] {
+  --cw-light: #e9edcc;
+  --cw-dark: #6f8c52;
+  --cw-wp: #ffffff;
+  --cw-we: #0a1004;
+  --cw-bp: #16200f;
+  --cw-be: #eef3dd;
+  --cw-mark: #c7462f;
+  --cw-check: #9c3b2e;
+  --cw-coord-light: #141c08;
+  --cw-coord-dark: #0e1606;
+}
+:root[data-cw-board='ink'] {
+  --cw-light: #9aa6b4;
+  --cw-dark: #2b3542;
+  --cw-wp: #ffffff;
+  --cw-we: #000000;
+  --cw-bp: #070b10;
+  --cw-be: #c9d4e0;
+  --cw-mark: #f0c548;
+  --cw-check: #7e2f3a;
+  --cw-coord-light: #080c12;
+  --cw-coord-dark: #e6edf5;
+}
+:root[data-cw-board='contrast'] {
+  --cw-light: #ffffff;
+  --cw-dark: #1a1a1a;
+  --cw-wp: #ffffff;
+  --cw-we: #000000;
+  --cw-bp: #000000;
+  --cw-be: #ffffff;
+  --cw-mark: #ffd400;
+  --cw-check: #a50d0d;
+  --cw-coord-light: #000000;
+  --cw-coord-dark: #ffffff;
+}
+
+:root[data-cw-board] .cw-sq.light { background: var(--cw-light, #b9c6d4); }
+:root[data-cw-board] .cw-sq.dark { background: var(--cw-dark, #4f6076); }
+:root[data-cw-board] .cw-piece.w { color: var(--cw-wp, #ffffff); }
+:root[data-cw-board] .cw-piece.b { color: var(--cw-bp, #101822); }
+:root[data-cw-board] .cw-sq.is-marked { box-shadow: inset 0 0 0 3px var(--cw-mark, #e0b341); }
+
+/*
+ * The square names, in a colour that depends on the square under them.
+ *
+ * `board.css` draws them in white at 75% on both colours, which against the pale square of the standard board is
+ * a contrast of roughly 1.8 to 1 -- a label nobody can read. One colour cannot serve both squares, so there are
+ * two, and the test checks each against the square it sits on.
+ */
+:root[data-cw-board] .cw-sq.light .cw-coord { color: var(--cw-coord-light, #0c121a); }
+:root[data-cw-board] .cw-sq.dark .cw-coord { color: var(--cw-coord-dark, #eef3f8); }
+
+/* ---------------------------------------------------------------- how the pieces are drawn */
+
+/*
+ * The pieces are characters from the chess alphabet, so "how they are drawn" is what is around them. The outline
+ * is what makes a white piece visible on a white square, which is why the flat form is only offered as a choice
+ * and the high-contrast board keeps its outline whichever form is chosen.
+ */
+:root[data-cw-pieces='classic'] .cw-piece.w { text-shadow: 0 0 1px var(--cw-we, #04070b), 0 1px 2px rgba(0, 0, 0, 0.6); }
+:root[data-cw-pieces='classic'] .cw-piece.b { text-shadow: 0 0 1px var(--cw-be, rgba(255, 255, 255, 0.5)); }
+
+:root[data-cw-pieces='bold'] .cw-piece.w {
+  text-shadow:
+    -1.5px -1.5px 0 var(--cw-we, #04070b), 1.5px -1.5px 0 var(--cw-we, #04070b),
+    -1.5px 1.5px 0 var(--cw-we, #04070b), 1.5px 1.5px 0 var(--cw-we, #04070b),
+    0 0 3px var(--cw-we, #04070b);
+}
+:root[data-cw-pieces='bold'] .cw-piece.b {
+  text-shadow:
+    -1.5px -1.5px 0 var(--cw-be, #dfe7f0), 1.5px -1.5px 0 var(--cw-be, #dfe7f0),
+    -1.5px 1.5px 0 var(--cw-be, #dfe7f0), 1.5px 1.5px 0 var(--cw-be, #dfe7f0),
+    0 0 3px var(--cw-be, #dfe7f0);
+}
+
+:root[data-cw-pieces='flat'] .cw-piece.w { text-shadow: none; }
+:root[data-cw-pieces='flat'] .cw-piece.b { text-shadow: none; }
+/* The black-and-white board has no colour difference to fall back on, so its outline stays whatever is chosen. */
+:root[data-cw-pieces='flat'][data-cw-board='contrast'] .cw-piece.w { text-shadow: 0 0 1px #000000, 0 0 2px #000000; }
+:root[data-cw-pieces='flat'][data-cw-board='contrast'] .cw-piece.b { text-shadow: 0 0 1px #ffffff, 0 0 2px #ffffff; }
+
+/* ---------------------------------------------------------------- piece size */
+
+/* The board's own value is the middle one, written out so the three read as one choice. */
+:root[data-cw-piece-size='small'] .cw-piece { font-size: clamp(14px, 5.6cqw, 36px); }
+:root[data-cw-piece-size='normal'] .cw-piece { font-size: clamp(18px, 7cqw, 46px); }
+:root[data-cw-piece-size='large'] .cw-piece { font-size: clamp(22px, 8.4cqw, 56px); }
+
+/* ---------------------------------------------------------------- the marks on a square */
+
+:root[data-cw-coords='off'] .cw-coord { display: none; }
+
+:root[data-cw-lastmove='off'] .cw-sq.is-last::after { display: none; }
+
+/*
+ * The square under a king in check.
+ *
+ * This rule has to exist even though board.css already paints that square, and the reason is the whole trick this
+ * file is built on turning round and biting: the square-colour rules above are four class-level selectors against
+ * board.css's two, so with a board theme chosen they also beat its own rule for the check square, and the red
+ * vanished under the square colour. A probe caught that; nothing else would have, because it only happens once a
+ * theme is set and the standard board looks right. So the mark is restated here, above the square colour, with a
+ * red that belongs to each board rather than one red for all five.
+ *
+ * Switched off, it goes back to the square's own colour rather than becoming transparent: the squares are opaque
+ * and a transparent one would show whatever is behind the board.
+ */
+:root[data-cw-board][data-cw-checkmark='on'] .cw-sq.is-check { background: var(--cw-check, #8d3b45); }
+:root[data-cw-checkmark='off'] .cw-sq.is-check.light { background: var(--cw-light, #b9c6d4); }
+:root[data-cw-checkmark='off'] .cw-sq.is-check.dark { background: var(--cw-dark, #4f6076); }
+
+/* ---------------------------------------------------------------- the keyboard cursor */
+
+/*
+ * A ring that works on a white square and on a black one.
+ *
+ * The board's own cursor is a dashed outline in the accent colour, which against the pale square of the standard
+ * board is a contrast of about 1.6 to 1 -- near enough invisible, and it is the only thing telling a keyboard user
+ * which square they are on. This draws two bands instead, black outside and white inside, so whichever way the
+ * square goes one of the two stands out against it.
+ *
+ * Both bands are inset shadows and neither is an outline, which is not an aesthetic choice. The first version used
+ * an outline for the white band with `outline-offset: -3px`, and an outline at that offset occupies exactly the
+ * same three pixels as a 3px inset shadow -- so the white was painted straight over the black, the cursor was a
+ * single white ring, and on a pale square it was as hard to see as the one it replaced. A screenshot of a real
+ * board is what showed it; the computed styles said both were applied, and both were.
+ *
+ * A square can be the cursor and be picked up, or be the cursor and be a square a piece may be taken on. The board
+ * says both of those with an inset shadow, and shadows do not add up across rules, so each combination is written
+ * out here in full and keeps every ring, each one further in than the last.
+ */
+:root[data-cw-cursor='strong'] .cw-sq.is-cursor {
+  outline: none;
+  box-shadow: inset 0 0 0 3px #000000, inset 0 0 0 6px #ffffff;
+}
+:root[data-cw-cursor='strong'] .cw-sq.is-cursor.is-selected {
+  box-shadow: inset 0 0 0 3px #000000, inset 0 0 0 6px #ffffff, inset 0 0 0 10px var(--cyan);
+}
+:root[data-cw-cursor='strong'] .cw-sq.is-cursor.is-target {
+  box-shadow: inset 0 0 0 3px #000000, inset 0 0 0 6px #ffffff, inset 0 0 0 11px color-mix(in srgb, var(--cyan) 70%, transparent);
+}
+
+/*
+ * Where a piece may go. After the cursor rules on purpose: a square can be both, and turning the dots off has to
+ * win over the cursor's version of the ring rather than lose to it on specificity.
+ */
+:root[data-cw-dots='off'] .cw-sq.is-legal::before { display: none; }
+:root[data-cw-dots='off'] .cw-sq.is-target { box-shadow: none; }
+:root[data-cw-dots='off'][data-cw-cursor='strong'] .cw-sq.is-target.is-cursor {
+  box-shadow: inset 0 0 0 3px #000000, inset 0 0 0 6px #ffffff;
+}
+
+/* ---------------------------------------------------------------- motion */
+
+/* The computer's own setting outranks this one, which is why there is no rule turning the fade back on. */
+:root[data-cw-fade='off'] .cw-sq { transition: none; }
+
+/* ---------------------------------------------------------------- the panel */
+
+.cw-cfg {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  container-type: inline-size;
+  container-name: cw-cfg-panel;
+}
+
+.cw-cfg-top { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 16px; }
+
+.cw-cfg-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(260px, 100%);
+  flex: 0 0 auto;
+}
+.cw-cfg-preview-note { margin: 0; color: var(--faint); font-size: var(--text-xs, 11px); line-height: 1.5; }
+
+.cw-cfg-intro { flex: 1 1 260px; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.cw-cfg-say { margin: 0; color: var(--text); font-size: var(--text-sm, 13px); line-height: 1.55; }
+.cw-cfg-quiet { margin: 0; color: var(--faint); font-size: var(--text-sm, 13px); line-height: 1.55; }
+
+.cw-cfg-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 16px;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--bg-mid) 60%, transparent);
+}
+.cw-cfg-group-top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.cw-cfg-group-name { margin: 0; font-size: var(--text-md, 15px); color: var(--text); }
+.cw-cfg-group-say { margin: 2px 0 0; color: var(--faint); font-size: var(--text-xs, 11px); line-height: 1.5; }
+
+.cw-cfg-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 0;
+  border-top: 1px solid var(--line);
+}
+.cw-cfg-field:first-of-type { border-top: 0; }
+.cw-cfg-field-name { color: var(--text); font-size: var(--text-sm, 13px); font-weight: 500; }
+.cw-cfg-field-say { margin: 0; color: var(--faint); font-size: var(--text-xs, 11px); line-height: 1.55; }
+
+.cw-cfg-choices { display: flex; flex-wrap: wrap; gap: 4px; }
+.cw-cfg-choice {
+  padding: 4px 12px;
+  border: 1px solid var(--glass-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-sm, 13px);
+  cursor: pointer;
+}
+.cw-cfg-choice:hover { border-color: var(--cyan); }
+.cw-cfg-choice[aria-pressed='true'] {
+  border-color: var(--cyan);
+  background: color-mix(in srgb, var(--cyan) 18%, transparent);
+  /* Not colour alone: the chosen one is also the heavier one. */
+  font-weight: 600;
+}
+.cw-cfg-choice:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+
+.cw-cfg-switch { display: flex; align-items: center; gap: 8px; }
+.cw-cfg-switch input { width: 16px; height: 16px; accent-color: var(--cyan); }
+
+.cw-cfg-slide { display: flex; align-items: center; gap: 8px; }
+.cw-cfg-slide input[type='range'] { flex: 1; min-width: 110px; accent-color: var(--cyan); }
+.cw-cfg-value {
+  min-width: 74px;
+  color: var(--text);
+  font-family: var(--mono, monospace);
+  font-size: var(--text-sm, 13px);
+  text-align: right;
+}
+
+.cw-cfg-told {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 8px 12px;
+  border: 1px dashed var(--glass-border);
+  border-radius: 10px;
+}
+.cw-cfg-told-why { margin: 0; color: var(--faint); font-size: var(--text-xs, 11px); line-height: 1.55; }
+
+.cw-cfg-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+
+.cw-cfg-warn {
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid #9c6a12;
+  border-left-width: 3px;
+  border-radius: 6px;
+  color: var(--text);
+  font-size: var(--text-xs, 11px);
+  line-height: 1.6;
+}
+.cw-cfg-warn ul { margin: 4px 0 0; padding-left: 16px; }
+
+.cw-cfg-out {
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--glass-border);
+  border-radius: 6px;
+  color: var(--text);
+  font-family: var(--mono, monospace);
+  font-size: var(--text-xs, 11px);
+  line-height: 1.65;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ---------------------------------------------------------------- the keys sheet */
+
+.cw-cfg-keys { display: flex; flex-direction: column; gap: 16px; }
+.cw-cfg-keys-say { margin: 0; color: var(--faint); font-size: var(--text-sm, 13px); line-height: 1.55; }
+
+.cw-cfg-keyset { display: flex; flex-direction: column; gap: 4px; }
+.cw-cfg-keyset-name { margin: 0 0 2px; font-size: var(--text-sm, 13px); color: var(--text); }
+.cw-cfg-keylist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.cw-cfg-key { display: flex; align-items: baseline; gap: 8px; padding: 4px 0; border-top: 1px solid var(--line); }
+.cw-cfg-key:first-child { border-top: 0; }
+.cw-cfg-chord {
+  flex: 0 0 118px;
+  padding: 2px 8px;
+  border: 1px solid var(--glass-border);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--cyan) 9%, transparent);
+  color: var(--text);
+  font-family: var(--mono, monospace);
+  font-size: var(--text-xs, 11px);
+  text-align: center;
+}
+.cw-cfg-does { flex: 1; min-width: 0; color: var(--text); font-size: var(--text-sm, 13px); line-height: 1.5; }
+.cw-cfg-does small { display: block; color: var(--faint); font-size: var(--text-xs, 11px); line-height: 1.5; }
+
+/* A chord the sheet lists that nothing in Orbis listens for.
+   Marked rather than dimmed, and marked on the row itself: a greyed-out row reads as "less important", and this is
+   the row somebody most needs to read before they press the key and wonder what they did wrong. */
+.cw-cfg-key.is-unanswered { padding-left: 8px; border-left: 2px solid var(--amber); }
+.cw-cfg-nothing { display: block; color: var(--amber); font-size: var(--text-xs, 11px); font-weight: 600; }
+
+.cw-cfg-notes { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.cw-cfg-note { display: flex; flex-direction: column; gap: 3px; padding: 8px 12px; border: 1px solid var(--glass-border); border-left-width: 3px; border-radius: 6px; }
+.cw-cfg-note.works { border-left-color: #2f8a55; }
+.cw-cfg-note.partly { border-left-color: #9c6a12; }
+.cw-cfg-note.missing { border-left-color: #c0564c; }
+.cw-cfg-note-what { display: flex; align-items: baseline; gap: 8px; color: var(--text); font-size: var(--text-sm, 13px); font-weight: 500; }
+/* The state is a word, not only a colour on the edge. */
+.cw-cfg-state { color: var(--faint); font-size: var(--text-xs, 11px); font-weight: 400; text-transform: lowercase; }
+.cw-cfg-note-say { margin: 0; color: var(--faint); font-size: var(--text-xs, 11px); line-height: 1.6; }
+.cw-cfg-note-needs { margin: 0; color: var(--text); font-size: var(--text-xs, 11px); line-height: 1.6; }
+
+/*
+ * A narrow panel stacks the preview above the words instead of squeezing both.
+ *
+ * 640, not 520. Beside the chat sidebar this panel is about 586px, which cleared the old threshold and kept the two
+ * side by side: a 260px board and a 310px column of text, so the sentence explaining what every setting on the
+ * screen does was being read thirty-six characters at a time. Stacked it gets the full width.
+ *
+ * The preview does not take the full width with it. A board that grows to 586px is a board as tall as the screen,
+ * which is the fault the other screens here were just capped for -- it stays the size it was and sits above the
+ * words rather than beside them.
+ */
+@container cw-cfg-panel (max-width: 640px) {
+  .cw-cfg-top { flex-direction: column; }
+  .cw-cfg-preview { width: min(300px, 100%); }
+}
+@container cw-cfg-panel (max-width: 520px) {
+  .cw-cfg-chord { flex-basis: 92px; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .cw-cfg-choice { transition: border-color 0.12s ease, background 0.12s ease; }
+}
+
+/*
+ * The board gets the screen; the controls get a column beside it.
+ *
+ * Before this the preview was a 260px box above a column of switches, so the one thing every setting on this screen
+ * is about was the smallest thing on it. The shared layout measures the room and tells the board how big to be, so
+ * the panel has to be a column that gives its height away -- `min-height: 0` is what makes the measurement mean
+ * anything, because without it the column is as tall as its content and the board and the box ask each other how
+ * big they are.
+ */
+.cw-cfg {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+.cw-cfg-stage { flex: 1 1 auto; min-height: 0; padding-left: 0; padding-right: 0; }
+
+/* The controls scroll on their own, so the board never moves while somebody works down the list. */
+.cw-cfg-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.cw-cfg-under { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+
+/* A fact as a chip rather than as a sentence, which is what two of these used to be. */
+.cw-cfg-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 9px;
+  border: 1px solid var(--glass-border, rgba(160, 210, 255, 0.16));
+  border-radius: var(--radius-pill, 999px);
+  font-size: var(--text-xs, 11px);
+  color: var(--faint);
+}
+.cw-cfg-chip.is-warn { color: var(--amber, #ffbe4d); border-color: color-mix(in srgb, var(--amber, #ffbe4d) 45%, transparent); }

@@ -1,96 +1,172 @@
 /* Chess World's own screen. Everything starts cw- so no other stylesheet can reach it, or it this one. */
-.cw-view { container-type: inline-size; container-name: cw-screen; }
 
-.cw-body { display: flex; flex-direction: column; flex: 1; min-height: 0; }
-
-.cw-tabs {
+/*
+ * ---------------------------------------------------------------- the whole window
+ *
+ * Chess World covers the window below the title bar. It used to wear the window's shared `Surface` frame, which is
+ * `position: absolute; inset: 0` inside `.stage` -- the column beside the Orbis sidebar and the chat. Measured
+ * there the screen was about 600 pixels wide, a 216-pixel rail of names took a third of it, and the board got
+ * whatever was left over, which was not much.
+ *
+ * `position: fixed` takes it out of `.stage` and out of `.hud-body` entirely, so the sidebar is covered without
+ * anything being told to collapse. The numbers are not a choice: 40px at the top clears the 36-pixel address bar
+ * and the Windows buttons the operating system draws over it natively, and `--mstrip-reserved` at the bottom is the
+ * height the market ticker has written there for itself, which is what stops the board's bottom rank hiding behind
+ * it. This is the same rule Files, OrbisEye, Cosmos, Toolkit, Arena, F1 and Football already use; it is not a
+ * second way of doing it.
+ */
+.cw-full {
+  position: fixed;
+  inset: 40px 0 var(--mstrip-reserved, 0px) 0;
+  z-index: 400;
   display: flex;
-  gap: 6px;
-  padding: 10px 20px 0;
-  border-bottom: 1px solid var(--line);
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--bg-mid, var(--bg-edge));
+  color: var(--text);
 }
-.cw-tab {
-  padding: 7px 14px;
-  border: 1px solid transparent;
-  border-bottom: 0;
-  border-radius: 10px 10px 0 0;
-  background: transparent;
-  color: var(--faint);
-  font: inherit;
-  cursor: pointer;
-}
-.cw-tab[aria-selected='true'] { color: var(--text); border-color: var(--line); background: color-mix(in srgb, var(--cyan) 10%, transparent); }
-.cw-tab:focus-visible { outline: 2px solid var(--cyan); outline-offset: -2px; }
 
-.cw-main {
+/* ---------------------------------------------------------------- dim text, made readable
+   Chess World's stylesheets reach for `--faint` 298 times, and measured against what is really behind it the app's
+   own value is 4.18 to 1 -- under the 4.5 a line of 12px text needs to be readable. Every one of those 298 places
+   was therefore slightly too dim to read, on every screen.
+
+   The value is redefined here, once, for everything inside the screen, rather than edited in 298 places or changed
+   in `tokens.generated.css`, which is generated and belongs to the whole window. Measured on the real screens:
+   5.4 to 1 on the dark glass, and 5.0 to 1 against the palest light-theme background -- still clearly dimmer than
+   `--muted`, which is the point of having both. */
+.cw-full, .cw-view { --faint: #7f848f; }
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme='dark']) .cw-full, :root:not([data-theme='dark']) .cw-view { --faint: #556782; }
+}
+:root[data-theme='light'] .cw-full, :root[data-theme='light'] .cw-view { --faint: #556782; }
+
+/* ---------------------------------------------------------------- the bar across the top */
+
+.cw-bar {
+  flex: 0 0 auto;
   display: flex;
-  gap: 20px;
-  flex: 1;
-  min-height: 0;
-  padding: 16px 20px;
-  overflow: auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  padding: 4px 12px;
+  min-height: 48px;
+  border-bottom: 1px solid var(--glass-border, rgba(160, 210, 255, 0.16));
+  background: var(--glass, rgba(14, 15, 18, 0.84));
 }
-.cw-boardside { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
-.cw-under { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.cw-nav { display: flex; gap: 4px; }
-.cw-state { color: var(--faint); font-size: var(--text-sm, 13px); }
 
-.cw-panel { flex: 1; min-width: 260px; max-width: 420px; overflow-y: auto; }
-.cw-pane { display: flex; flex-direction: column; gap: 10px; }
-.cw-pane h3 { margin: 0; font-size: var(--text-md, 15px); }
-.cw-faint { margin: 0; color: var(--faint); font-size: var(--text-sm, 13px); line-height: 1.5; }
-.cw-engine { margin: 0; color: var(--text); font-size: var(--text-sm, 13px); }
-.cw-row { display: flex; flex-wrap: wrap; gap: 8px; }
-
-.cw-moves {
-  list-style: none;
-  margin: 0;
+.cw-back {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
   padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  max-height: 46vh;
-  overflow-y: auto;
-  font-family: var(--mono, monospace);
-  font-size: var(--text-sm, 13px);
+  border: 1px solid var(--glass-border, rgba(160, 210, 255, 0.16));
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--text) 5%, transparent);
+  color: var(--text);
+  cursor: pointer;
 }
-.cw-moves li { display: flex; align-items: baseline; gap: 6px; }
-.cw-num { width: 32px; color: var(--faint); text-align: right; }
-.cw-move {
-  min-width: 56px;
-  padding: 2px 6px;
+.cw-back:hover { border-color: var(--cyan); }
+.cw-back:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+
+.cw-brand {
+  font-family: var(--display, 'Orbitron', sans-serif);
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  font-size: var(--text-md, 13px);
+}
+
+/* The five groups. The board wants the width the old column of twenty names was taking, so they are tabs. */
+.cw-groups { display: flex; flex-wrap: wrap; gap: 4px; margin-left: 8px; flex: 1 1 auto; min-width: 0; }
+
+.cw-group-tab {
+  padding: 8px 12px;
+  border: 0;
+  border-radius: var(--radius-tab, 8px);
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+}
+.cw-group-tab:hover { color: var(--text); background: color-mix(in srgb, var(--text) 5%, transparent); }
+.cw-group-tab:focus-visible { outline: 2px solid var(--cyan); outline-offset: -2px; }
+.cw-group-tab.is-here {
+  color: var(--text);
+  background: color-mix(in srgb, var(--cyan) 12%, transparent);
+  box-shadow: inset 0 -2px 0 var(--cyan);
+}
+
+.cw-keys {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--glass-border, rgba(160, 210, 255, 0.16));
+  border-radius: var(--radius-sm, 6px);
+  background: color-mix(in srgb, var(--text) 5%, transparent);
+  color: var(--muted);
+  font: 600 var(--text-md, 13px) / 1 var(--font, sans-serif);
+  cursor: pointer;
+}
+.cw-keys:hover { color: var(--text); border-color: var(--cyan); }
+
+/*
+ * The areas of the group you are in, as a row under the tabs.
+ *
+ * The names are always on screen, which is the one thing the old rail got right and is kept: the browser's own rail
+ * held its labels at `opacity: 0` until you hovered and left a column of unexplained icons. The one-line
+ * description is now the button's tooltip rather than a second line of text under every name -- it was a paragraph
+ * of explanation per name, which is the kind of text the board should have had instead.
+ */
+.cw-areas {
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--line, rgba(255, 255, 255, 0.09));
+  background: var(--rail-bg, rgba(0, 0, 0, 0.4));
+}
+
+.cw-area-tab {
+  padding: 5px 12px;
   border: 1px solid transparent;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--text);
-  font: inherit;
-  text-align: left;
+  border-radius: var(--radius-pill, 999px);
+  background: none;
+  color: var(--muted);
+  font: var(--text-sm, 12px) / 1.4 var(--font, sans-serif);
+  white-space: nowrap;
   cursor: pointer;
 }
-.cw-move:hover { border-color: var(--glass-border); }
-.cw-move.is-now { background: color-mix(in srgb, var(--cyan) 22%, transparent); border-color: var(--cyan); }
+.cw-area-tab:hover { color: var(--text); border-color: var(--line); background: color-mix(in srgb, var(--cyan) 6%, transparent); }
+.cw-area-tab:focus-visible { outline: 2px solid var(--cyan); outline-offset: -2px; }
+.cw-area-tab.is-here {
+  color: var(--text);
+  font-weight: 600;
+  border-color: var(--cyan);
+  background: color-mix(in srgb, var(--cyan) 14%, transparent);
+}
 
-.cw-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-.cw-item {
-  width: 100%;
+/*
+ * The area itself: everything that is left.
+ *
+ * `container-name: cw-screen` is here rather than on the screen root on purpose. Seventeen area stylesheets ask
+ * `@container cw-screen (max-width: …)` to decide whether to stack, and the question they mean is "how much room
+ * do I have", not "how wide is the window". On the root it would answer with the window.
+ */
+.cw-area {
+  container-type: inline-size;
+  container-name: cw-screen;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding: 8px 10px;
-  border: 1px solid var(--glass-border);
-  border-radius: 10px;
-  background: transparent;
-  color: var(--text);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
+  overflow-y: auto;
 }
-.cw-item small { color: var(--faint); font-size: var(--text-xs, 11px); }
-.cw-item:hover { border-color: var(--cyan); }
-.cw-item.is-open { border-color: var(--cyan); background: color-mix(in srgb, var(--cyan) 10%, transparent); }
 
-/* A narrow screen stacks the panel under the board rather than squeezing the board. */
-@container cw-screen (max-width: 880px) {
-  .cw-main { flex-direction: column; }
-  .cw-panel { max-width: none; }
-}
+.cw-loading { margin: 0; padding: 16px; color: var(--faint); font-size: var(--text-sm, 13px); }
+
+/* The small marks on Chess World's buttons. `icons.tsx` says why they are drawn rather than typed. They sit on the
+   text baseline so a mark and a word in the same button line up. */
+.cw-icon { display: block; flex: 0 0 auto; }

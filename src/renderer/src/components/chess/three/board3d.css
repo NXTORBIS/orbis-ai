@@ -1,0 +1,234 @@
+/*
+ * The 3D board.
+ *
+ * Every class starts cw-3d- so it cannot touch another stylesheet or be touched by one. Nothing here sets a colour
+ * of its own beyond what Orbis's own tokens give it, because the picture inside the canvas carries all the colour
+ * this part of the screen needs.
+ *
+ * Sizes are in container-query units against the stage, not the window: the board sits beside a panel, so the
+ * window's width says nothing useful about how wide the board is.
+ */
+
+.cw-3d-wrap {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+/*
+ * The stage is the board's own square.
+ *
+ * It is square on purpose: a 3D board in a letterbox either wastes the corners or crops the back rank, and neither
+ * is worth the extra width. `min(72vh, 100%)` is what the flat board uses, so the two are the same size and
+ * switching between them does not move the rest of the screen.
+ */
+.cw-3d-stage {
+  position: relative;
+  width: min(72vh, 100%);
+  aspect-ratio: 1;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: radial-gradient(circle at 50% 36%, color-mix(in srgb, var(--cyan) 7%, transparent), transparent 62%);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  /* The pointer both turns the camera and plays moves, so the browser must not also treat a drag as a scroll. */
+  touch-action: none;
+  cursor: grab;
+  container-type: inline-size;
+}
+.cw-3d-stage:active { cursor: grabbing; }
+.cw-3d-stage:focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; }
+
+.cw-3d-canvas-host { position: absolute; inset: 0; }
+
+/* The canvas is sized in pixels by the renderer and stretched to the stage by these two lines. */
+.cw-3d-canvas { display: block; width: 100% !important; height: 100% !important; }
+
+.cw-3d-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  color: var(--faint);
+  font-size: var(--text-sm, 13px);
+  pointer-events: none;
+}
+
+/* What the keyboard is standing on, for a screen reader. Never shown, never takes up room. */
+.cw-3d-live {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.cw-3d-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+
+.cw-3d-btn {
+  padding: 4px 8px;
+  border: 1px solid var(--glass-border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-xs, 11px);
+  line-height: 1.6;
+  cursor: pointer;
+}
+.cw-3d-btn:hover { border-color: var(--cyan); }
+.cw-3d-btn:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+
+.cw-3d-hint {
+  margin: 0;
+  max-width: 54ch;
+  color: var(--faint);
+  font-size: var(--text-xs, 11px);
+  line-height: 1.55;
+}
+.cw-3d-faint { color: var(--faint); opacity: 0.8; }
+
+/* When the 3D board could not be drawn. One sentence, above the flat board that is standing in for it. */
+.cw-3d-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px;
+  margin: 0;
+  padding: 8px 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--text);
+  font-size: var(--text-sm, 13px);
+  line-height: 1.5;
+}
+/* 3px above and below: a line of 13px text is a 15px-tall button, under the smallest thing a person can reliably
+   hit. The same correction is in the other four link-shaped buttons in Chess World. */
+.cw-3d-link {
+  border: 0;
+  padding: 4px 0;
+  min-height: 17px;
+  background: transparent;
+  color: var(--cyan);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* Choosing what a pawn becomes. It sits over the board and has to be answered, as on the flat board. */
+.cw-3d-promo {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: min(72vh, 100%);
+  aspect-ratio: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 10px;
+  background: rgba(8, 11, 15, 0.86);
+  backdrop-filter: blur(3px);
+}
+.cw-3d-promo p { margin: 0; color: var(--text); }
+.cw-3d-promo-row { display: flex; gap: 8px; }
+.cw-3d-promo-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 12px;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text);
+  font-size: 30px;
+  cursor: pointer;
+}
+.cw-3d-promo-btn small { font-size: var(--text-xs, 11px); color: var(--faint); }
+.cw-3d-promo-btn:hover, .cw-3d-promo-btn:focus-visible { border-color: var(--cyan); outline: none; }
+.cw-3d-promo-cancel {
+  border: 0;
+  background: transparent;
+  color: var(--faint);
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+/* On a narrow stage the hint is the first thing worth dropping: the controls say the same thing. */
+@container cw-screen (max-width: 560px) {
+  .cw-3d-faint { display: none; }
+}
+
+/*
+ * The stage stops growing before it is the whole screen.
+ *
+ * `min(72vh, 100%)` keeps the 3D board the same size as the flat one, which is right -- and at 600px the flat one
+ * is itself too big, so both were a 580px square in an area 630px tall and the moves, the way through them and the
+ * switch back to the flat board were all below the fold. Capped the same way the flat boards on the other screens
+ * are capped, so the two still match and the controls under them are on screen.
+ */
+@container cw-screen (max-width: 760px) {
+  .cw-3d-stage { width: min(72vh, 100%, 420px); }
+}
+
+/* ---------------------------------------------------------------- the 3D board's own screen
+   `Board3DArea` wraps the view above with a heading, a way through the moves and the switch back to the flat
+   board. Its classes are cw-3da- rather than cw-3d- because the view already owns cw-3d-stage and several others,
+   and a wrapper quietly inheriting the canvas container's rules is a bug that is very hard to see. */
+
+.cw-3da-area { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.cw-3da-head { display: flex; flex-direction: column; gap: 3px; }
+.cw-3da-title { margin: 0; font-size: var(--text-md, 15px); }
+.cw-3da-meta { margin: 0; color: var(--faint); font-size: var(--text-xs, 11px); line-height: 1.4; }
+.cw-3da-stage { min-width: 0; }
+.cw-3da-flat { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.cw-3da-under { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.cw-3da-nav { display: flex; gap: 4px; }
+.cw-3da-state { color: var(--faint); font-size: var(--text-sm, 13px); }
+
+.cw-3da-moves {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 34vh;
+  overflow-y: auto;
+  font-family: var(--mono, monospace);
+  font-size: var(--text-sm, 13px);
+}
+.cw-3da-moves li { display: flex; align-items: baseline; gap: 4px; }
+.cw-3da-num { width: 32px; color: var(--faint); text-align: right; }
+.cw-3da-move {
+  min-width: 56px;
+  padding: 2px 4px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.cw-3da-move:hover { border-color: var(--glass-border); }
+.cw-3da-move:focus-visible { outline: 2px solid var(--cyan); outline-offset: -2px; }
+.cw-3da-move.is-now { background: color-mix(in srgb, var(--cyan) 22%, transparent); border-color: var(--cyan); }
+
+/* What the view counted, not what this screen claims. */
+.cw-3da-diag { margin: 0; color: var(--faint); font-size: var(--text-xs, 11px); line-height: 1.4; }
+
+/* The piece you are choosing when a pawn promotes, drawn rather than lettered. */
+.cw-3d-promo-piece { width: 30px; height: 30px; }

@@ -1,0 +1,418 @@
+/*
+ * The Play screen: setting a game up, and playing it.
+ *
+ * Everything here is beside the board, never instead of it. The board's size is decided by `ChessStage`, so there
+ * is no width, no height and no maximum for it anywhere in this file -- that was the fault being fixed, and a rule
+ * here would quietly put it back.
+ *
+ * Every class starts `cw-pl-` so this stylesheet cannot reach another area's, and every token is written with a
+ * fallback because a token name that does not exist fails silently.
+ */
+
+.cw-pl-root {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  /* Not optional: without it the column is at least as tall as the board, and the board and the box end up asking
+     each other how big they are. */
+  min-height: 0;
+  min-width: 0;
+}
+
+/* ---------------------------------------------------------------- the two player lines */
+
+.cw-pl-player {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2, 8px);
+  padding: var(--space-2, 8px) var(--space-3, 12px);
+  border: 1px solid var(--glass-border, rgba(160, 210, 255, 0.16));
+  border-radius: var(--radius-md, 10px);
+  background: var(--glass, rgba(14, 15, 18, 0.84));
+  font-size: var(--text-md, 13px);
+}
+
+/* Whose turn it is: a ring, a brighter disc and the words "to move" in the name. Never colour alone. */
+.cw-pl-player.is-turn {
+  border-color: var(--cyan, #3fd8ff);
+  box-shadow: 0 0 0 1px var(--cyan-dim, rgba(63, 216, 255, 0.4)) inset;
+}
+
+.cw-pl-disc {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1px solid var(--line-strong, rgba(255, 255, 255, 0.14));
+  flex: 0 0 auto;
+}
+
+.cw-pl-disc.is-w {
+  background: #e8ecf2;
+}
+
+.cw-pl-disc.is-b {
+  background: #22262c;
+}
+
+.cw-pl-name {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  font-weight: 600;
+}
+
+.cw-pl-name small {
+  font-weight: 400;
+  font-size: var(--text-xs, 11px);
+  color: var(--faint);
+}
+
+/* What the pieces on the board are worth. A count, not a score, so it is quiet. */
+.cw-pl-points {
+  margin-left: auto;
+  font-family: var(--mono, monospace);
+  font-size: var(--text-xs, 11px);
+  color: var(--faint);
+}
+
+.cw-pl-time {
+  font-family: var(--mono, monospace);
+  font-size: var(--text-xl, 18px);
+  font-variant-numeric: tabular-nums;
+  padding: 2px var(--space-2, 8px);
+  border-radius: var(--radius-sm, 6px);
+  background: var(--surface-2, #1b1d20);
+}
+
+.cw-pl-time small {
+  font-size: var(--text-xs, 11px);
+  color: var(--faint);
+  margin-left: 4px;
+}
+
+/* Running low, and the flag having fallen, are two different things and both are said as well as shown. */
+.cw-pl-player.is-low .cw-pl-time {
+  color: var(--amber, #ffbe4d);
+}
+
+.cw-pl-player.is-flagged .cw-pl-time {
+  color: var(--red, #ff4d6d);
+  text-decoration: line-through;
+}
+
+.cw-pl-flag {
+  font-size: var(--text-xs, 11px);
+  color: var(--red, #ff4d6d);
+}
+
+/* ---------------------------------------------------------------- under the board */
+
+.cw-pl-under {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3, 12px);
+  flex-wrap: wrap;
+}
+
+.cw-pl-state {
+  font-size: var(--text-sm, 12px);
+  color: var(--muted, #a2a6ae);
+  min-width: 0;
+}
+
+/* ---------------------------------------------------------------- the column beside the board */
+
+.cw-pl-side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3, 12px);
+  min-height: 0;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.cw-pl-controls,
+.cw-pl-over {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2, 8px);
+}
+
+.cw-pl-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2, 8px);
+}
+
+/* The move list takes whatever height is left, and scrolls inside itself. */
+.cw-pl-moves {
+  flex: 1 1 auto;
+  min-height: 120px;
+}
+
+.cw-pl-title,
+.cw-pl-heading {
+  margin: 0;
+  font-family: var(--display, var(--font-display));
+  font-size: var(--text-md, 13px);
+  letter-spacing: 0.02em;
+}
+
+.cw-pl-heading {
+  font-size: var(--text-lg, 15px);
+}
+
+.cw-pl-note {
+  margin: 0;
+  font-size: var(--text-xs, 11px);
+  color: var(--faint);
+}
+
+/* ---------------------------------------------------------------- the setup as chips, not paragraphs */
+
+.cw-pl-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1, 4px);
+}
+
+.cw-pl-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 2px var(--space-2, 8px);
+  border: 1px solid var(--pill-border, var(--line));
+  border-radius: var(--radius-pill, 999px);
+  background: var(--pill-bg, rgba(255, 255, 255, 0.04));
+  font-size: var(--text-xs, 11px);
+}
+
+.cw-pl-chip b {
+  font-weight: 600;
+  color: var(--faint);
+}
+
+/* ---------------------------------------------------------------- the result, the offers, the hint, a fault */
+
+.cw-pl-over {
+  padding: var(--space-3, 12px);
+  border: 1px solid var(--cyan-dim, rgba(63, 216, 255, 0.4));
+  border-radius: var(--radius-md, 10px);
+  background: var(--accent-fill, rgba(63, 216, 255, 0.16));
+}
+
+.cw-pl-overhead {
+  margin: 0;
+  font-family: var(--display, var(--font-display));
+  font-size: var(--text-lg, 15px);
+}
+
+.cw-pl-overdetail {
+  margin: 0;
+  font-size: var(--text-sm, 12px);
+  color: var(--muted, #a2a6ae);
+}
+
+.cw-pl-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-1, 4px) var(--space-3, 12px);
+  margin: 0;
+}
+
+.cw-pl-facts > div {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2, 8px);
+  border-bottom: 1px solid var(--line, rgba(255, 255, 255, 0.09));
+  padding-bottom: 2px;
+}
+
+.cw-pl-facts dt {
+  font-size: var(--text-xs, 11px);
+  color: var(--faint);
+}
+
+.cw-pl-facts dd {
+  margin: 0;
+  font-size: var(--text-xs, 11px);
+  font-variant-numeric: tabular-nums;
+}
+
+.cw-pl-offer,
+.cw-pl-hint,
+.cw-pl-problem {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2, 8px);
+  padding: var(--space-2, 8px) var(--space-3, 12px);
+  border-radius: var(--radius-md, 10px);
+  font-size: var(--text-sm, 12px);
+  border: 1px solid var(--glass-border, rgba(160, 210, 255, 0.16));
+  background: var(--surface-2, #1b1d20);
+}
+
+.cw-pl-offer p,
+.cw-pl-hint p,
+.cw-pl-problem p {
+  margin: 0;
+}
+
+.cw-pl-problem {
+  border-color: var(--danger-border, var(--red));
+  background: var(--danger-bg, rgba(255, 77, 109, 0.12));
+  color: var(--text, #ededef);
+}
+
+/* ---------------------------------------------------------------- what it says as the game goes on */
+
+.cw-pl-remarks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1, 4px);
+  max-height: 22vh;
+  overflow-y: auto;
+  font-size: var(--text-xs, 11px);
+  color: var(--muted, #a2a6ae);
+}
+
+.cw-pl-remarks li {
+  padding: 4px var(--space-2, 8px);
+  border-left: 2px solid var(--line, rgba(255, 255, 255, 0.09));
+}
+
+/* A remark made from the engine's own numbers is marked as such, and says so in words too. */
+.cw-pl-remarks li.is-engine {
+  border-left-color: var(--cyan, #3fd8ff);
+  color: var(--text, #ededef);
+}
+
+.cw-pl-remarks small {
+  color: var(--faint);
+}
+
+/* ---------------------------------------------------------------- setting a game up */
+
+.cw-pl-setuptop,
+.cw-pl-setupbottom {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3, 12px);
+  flex-wrap: wrap;
+}
+
+.cw-pl-engine {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2, 8px);
+  font-size: var(--text-sm, 12px);
+  color: var(--muted, #a2a6ae);
+}
+
+.cw-pl-engine.is-missing {
+  color: var(--amber, #ffbe4d);
+}
+
+.cw-pl-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--amber, #ffbe4d);
+}
+
+.cw-pl-dot.is-on {
+  background: var(--green, #3ee58a);
+}
+
+.cw-pl-opponents,
+.cw-pl-choices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2, 8px);
+  min-height: 0;
+  min-width: 0;
+  overflow-y: auto;
+}
+
+.cw-pl-install {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2, 8px);
+  padding: var(--space-2, 8px);
+  border: 1px solid var(--amber, #ffbe4d);
+  border-radius: var(--radius-md, 10px);
+}
+
+/* The clocks, grouped the way a chess site groups them: a row of times per family. */
+.cw-pl-clocks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2, 8px);
+}
+
+.cw-pl-familyname {
+  font-size: var(--text-xs, 11px);
+  color: var(--faint);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.cw-pl-times,
+.cw-pl-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1, 4px);
+}
+
+.cw-pl-time-btn,
+.cw-pl-pill {
+  font: inherit;
+  font-size: var(--text-sm, 12px);
+  padding: 5px var(--space-3, 12px);
+  border: 1px solid var(--pill-border, var(--line));
+  border-radius: var(--radius-control, 8px);
+  background: var(--pill-bg, rgba(255, 255, 255, 0.04));
+  color: var(--text, #ededef);
+  cursor: pointer;
+}
+
+.cw-pl-time-btn {
+  font-family: var(--mono, monospace);
+  min-width: 68px;
+  text-align: center;
+}
+
+.cw-pl-time-btn:hover,
+.cw-pl-pill:hover {
+  background: var(--hover, rgba(255, 255, 255, 0.07));
+}
+
+/* The one that is chosen: filled, ringed and `aria-pressed`, so it is not the colour on its own saying it. */
+.cw-pl-time-btn[aria-pressed='true'],
+.cw-pl-pill[aria-pressed='true'] {
+  border-color: var(--cyan, #3fd8ff);
+  background: var(--accent-fill, rgba(63, 216, 255, 0.16));
+  box-shadow: 0 0 0 1px var(--cyan-dim, rgba(63, 216, 255, 0.4)) inset;
+}
+
+.cw-pl-time-btn:focus-visible,
+.cw-pl-pill:focus-visible {
+  outline: 2px solid var(--cyan, #3fd8ff);
+  outline-offset: 2px;
+}
+
+/* On a narrow window the two side columns are already below the board, so the opponent list stops scrolling on
+   its own and simply runs down the page. */
+@container cw-screen (max-width: 900px) {
+  .cw-pl-opponents,
+  .cw-pl-choices {
+    overflow-y: visible;
+  }
+
+  .cw-pl-facts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

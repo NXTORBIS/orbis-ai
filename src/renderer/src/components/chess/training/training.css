@@ -1,0 +1,549 @@
+/*
+ * The two training screens: the Calculation Gym and Blindfold (Sections 211-230).
+ *
+ * Everything here starts `cw-tr-`, so no other stylesheet can reach it and it can reach nothing else. A stylesheet
+ * is one global namespace and a duplicate class name is silent -- `src/shared/cssCollisions.test.ts` is what makes
+ * that a rule rather than a habit.
+ *
+ * Widths come from a container query on `cw-screen`, the Chess World screen's own container, and never from the
+ * width of the window. Beside the chat sidebar this screen is about 600px wide while the window is 1600, so a
+ * window media query would be measuring the wrong box.
+ *
+ * ## The one rule worth saying in a stylesheet
+ *
+ * **There is no rule in here that hides a board.** Not `display: none`, not `visibility`, not an opacity, not a
+ * blur, not a colour that happens to match the background. A board hidden by CSS is still in the document, in the
+ * accessibility tree, in a screenshot of the window and readable by anything that looks. Whether a board exists at
+ * all is decided in `trainingView.ts` and `blindGame.ts`, and `.cw-tr-noboard` below is what is drawn *instead of*
+ * a board -- the empty place, with the reason in it.
+ */
+
+/* ---------------------------------------------------------------- the two screens' shape */
+
+.cw-tr-gym,
+.cw-tr-blind {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  gap: 16px;
+  padding: 4px 0 16px;
+}
+
+.cw-tr-side {
+  flex: 0 0 248px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+  padding-right: 8px;
+  border-right: 1px solid var(--line);
+}
+
+.cw-tr-main {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  /*
+   * Not `overflow-y: auto`. The board is measured against the height this column has, and a column that scrolls is
+   * as tall as its content wants -- so the stage would measure a box the board had just made taller and the two
+   * would chase each other. The panel beside the board is what scrolls, which the stage already arranges.
+   */
+  overflow: hidden;
+}
+
+/* ---------------------------------------------------------------- the list of things to do */
+
+.cw-tr-says {
+  margin: 0;
+  font-size: var(--text-xs, 11px);
+  line-height: 1.45;
+  color: var(--faint);
+}
+
+.cw-tr-refused {
+  font-size: var(--text-xs, 11px);
+  color: var(--faint);
+}
+.cw-tr-refused summary { cursor: pointer; }
+.cw-tr-refused ul { margin: 4px 0 0; padding-left: 16px; line-height: 1.4; }
+
+.cw-tr-items { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+
+.cw-tr-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 8px 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm, 6px);
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.cw-tr-item strong { font-size: var(--text-sm, 13px); font-weight: 600; }
+.cw-tr-item small { font-size: var(--text-xs, 11px); color: var(--faint); line-height: 1.35; }
+.cw-tr-item:hover { background: color-mix(in srgb, var(--cyan) 6%, transparent); }
+.cw-tr-item:focus-visible { outline: 2px solid var(--cyan); outline-offset: -2px; }
+.cw-tr-item-on {
+  border-color: var(--cyan);
+  background: color-mix(in srgb, var(--cyan) 12%, transparent);
+}
+
+/* ---------------------------------------------------------------- the heading */
+
+.cw-tr-head { display: flex; flex-direction: column; gap: 4px; }
+.cw-tr-title { margin: 0; font-size: var(--text-md, 15px); font-weight: 600; line-height: 1.35; }
+.cw-tr-meta {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--text-xs, 11px);
+  line-height: 1.4;
+}
+
+.cw-tr-badge {
+  padding: 2px 8px;
+  border: 1px solid var(--glass-border);
+  border-radius: 999px;
+  font-size: var(--text-xs, 11px);
+  color: var(--faint);
+  white-space: nowrap;
+}
+.cw-tr-badge-ok { border-color: var(--cyan); color: var(--cyan); }
+
+.cw-tr-faint { margin: 0; font-size: var(--text-xs, 11px); line-height: 1.45; color: var(--faint); }
+
+.cw-tr-warn {
+  margin: 0;
+  padding: 8px 8px;
+  border: 1px solid var(--amber);
+  border-radius: var(--radius-sm, 6px);
+  background: color-mix(in srgb, var(--amber) 10%, transparent);
+  font-size: var(--text-xs, 11px);
+  line-height: 1.45;
+}
+
+/* ---------------------------------------------------------------- setting a round up */
+
+.cw-tr-setup {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm, 6px);
+}
+
+/*
+ * A strip of choices.
+ *
+ * `Segmented` draws bare buttons and takes the class for them as a prop, so a strip that does not pass one comes
+ * out as unstyled browser buttons -- which is how it looked before this rule existed.
+ */
+.cw-tr-seg { display: flex; flex-wrap: wrap; gap: 4px; }
+.cw-tr-tab {
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm, 6px);
+  background: none;
+  color: var(--faint);
+  font: inherit;
+  font-size: var(--text-xs, 11px);
+  cursor: pointer;
+}
+.cw-tr-tab:hover { color: var(--text); background: color-mix(in srgb, var(--cyan) 6%, transparent); }
+.cw-tr-tab:focus-visible { outline: 2px solid var(--cyan); outline-offset: -2px; }
+.cw-tr-tab.on {
+  border-color: var(--cyan);
+  background: color-mix(in srgb, var(--cyan) 14%, transparent);
+  color: var(--text);
+  font-weight: 600;
+}
+.cw-tr-note { margin: 0; font-size: var(--text-sm, 13px); line-height: 1.5; }
+.cw-tr-go { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.cw-tr-dials { display: flex; flex-wrap: wrap; gap: 12px; }
+.cw-tr-dial {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm, 6px);
+}
+.cw-tr-dial-name { font-size: var(--text-xs, 11px); color: var(--faint); }
+.cw-tr-dial-value { font-family: var(--mono, monospace); font-size: var(--text-sm, 13px); font-weight: 600; }
+
+.cw-tr-count {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--text-sm, 13px);
+}
+
+/* ---------------------------------------------------------------- the board, and the place it is not */
+
+/*
+ * The board is laid out by `TrainStage` now, not by this file.
+ *
+ * What was here was `.cw-tr-table` as a flex row with `.cw-tr-boardwrap` at `min(420px, 46%)` -- the board capped
+ * at 420 pixels and never allowed more than a bit under half the screen. That was the owner's complaint in one
+ * declaration. The stage measures the room and the board takes what is left after the panel beside it.
+ */
+.cw-tr-stage { padding: 0; }
+.cw-tr-aside { min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+
+/* ---------------------------------------------------------------- what a go is set up as */
+
+/*
+ * The two pickers' settings as four facts you can read at a glance, instead of the paragraph that used to repeat
+ * what the pickers said. The long version of each is the title, so it is one hover away and not in the way.
+ */
+.cw-tr-terms {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2, 8px);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.cw-tr-term {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 4px 10px;
+  border: 1px solid var(--line, rgba(255, 255, 255, 0.09));
+  border-radius: var(--radius-sm, 6px);
+  background: var(--pill-bg, color-mix(in srgb, var(--text, #ededef) 4%, transparent));
+}
+.cw-tr-term-name {
+  font-size: var(--text-xs, 11px);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--faint, #7f848f);
+}
+.cw-tr-term-value { font-size: var(--text-sm, 12px); font-weight: 600; color: var(--text, #ededef); }
+/* The go that counts is marked by a line as well as a colour, because colour alone says nothing to some people. */
+.cw-tr-term.is-counted {
+  border-color: var(--cyan, #3fd8ff);
+  box-shadow: inset 2px 0 0 var(--cyan, #3fd8ff);
+}
+
+/*
+ * What is drawn when there is no board.
+ *
+ * Not a hidden board: there is no board in the document at all when `boardFen` is null, which is the whole point.
+ * This is the empty place with the reason in it, sized like the board so the layout does not jump when the position
+ * comes back at the end of a round.
+ */
+.cw-tr-noboard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  aspect-ratio: 1 / 1;
+  width: 100%;
+  padding: 16px;
+  border: 1px dashed var(--glass-border);
+  border-radius: var(--radius-sm, 6px);
+  background: color-mix(in srgb, var(--cyan) 3%, transparent);
+  text-align: center;
+}
+.cw-tr-noboard-label { margin: 0; font-size: var(--text-sm, 13px); font-weight: 600; }
+.cw-tr-noboard-why { margin: 0; max-width: 34ch; font-size: var(--text-xs, 11px); line-height: 1.5; color: var(--faint); }
+
+.cw-tr-explored {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--text-xs, 11px);
+  line-height: 1.45;
+  color: var(--amber);
+}
+
+/* The position written out, for the mode that reads it out. Monospaced so square names are easy to pick apart. */
+.cw-tr-readout {
+  margin: 0;
+  padding: 8px 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm, 6px);
+  font-family: var(--mono, monospace);
+  font-size: var(--text-xs, 11px);
+  line-height: 1.6;
+}
+
+.cw-tr-looks { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+
+/* ---------------------------------------------------------------- candidate moves */
+
+.cw-tr-cands { display: flex; flex-direction: column; gap: 8px; }
+.cw-tr-cands-label { margin: 0; font-size: var(--text-xs, 11px); line-height: 1.45; color: var(--faint); }
+.cw-tr-cand-group { display: flex; flex-direction: column; gap: 4px; }
+.cw-tr-cand-head {
+  margin: 0;
+  font-size: var(--text-xs, 11px);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+.cw-tr-cand-list { display: flex; flex-wrap: wrap; gap: 4px; }
+.cw-tr-cand { font-family: var(--mono, monospace); }
+
+/* ---------------------------------------------------------------- writing a line */
+
+.cw-tr-line {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm, 6px);
+}
+.cw-tr-line-label { margin: 0; font-size: var(--text-sm, 13px); line-height: 1.45; }
+.cw-tr-line-none { margin: 0; font-size: var(--text-xs, 11px); color: var(--faint); }
+.cw-tr-line-text {
+  margin: 0;
+  font-family: var(--mono, monospace);
+  font-size: var(--text-xs, 11px);
+  line-height: 1.5;
+  color: var(--faint);
+  overflow-wrap: anywhere;
+}
+
+.cw-tr-rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 1px; }
+.cw-tr-row { display: grid; grid-template-columns: 3.5em 1fr 1fr; gap: 4px; font-family: var(--mono, monospace); font-size: var(--text-sm, 13px); }
+.cw-tr-num { color: var(--faint); }
+.cw-tr-cell { min-width: 0; }
+
+.cw-tr-tidied { margin: 0; font-size: var(--text-xs, 11px); line-height: 1.45; color: var(--faint); }
+
+.cw-tr-enter { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; }
+.cw-tr-enter-field { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1 1 10em; }
+.cw-tr-enter-name { font-size: var(--text-xs, 11px); color: var(--faint); }
+.cw-tr-enter-box {
+  width: 100%;
+  min-width: 0;
+  padding: 4px 8px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm, 6px);
+  background: var(--bg-mid, transparent);
+  color: var(--text);
+  font-family: var(--mono, monospace);
+  font-size: var(--text-sm, 13px);
+}
+.cw-tr-enter-box:focus-visible { outline: 2px solid var(--cyan); outline-offset: -1px; }
+
+/*
+ * A writing mistake and a chess mistake are different colours and different words, because they are different
+ * mistakes. Somebody who found the right idea and wrote it badly has not made a chess mistake, and all three class
+ * names are written out here because the component builds them from the fault's own name.
+ */
+.cw-tr-fault {
+  padding: 8px 8px;
+  border: 1px solid var(--line);
+  border-left-width: 3px;
+  border-radius: var(--radius-sm, 6px);
+}
+.cw-tr-fault-notation { border-left-color: var(--amber); }
+.cw-tr-fault-chess { border-left-color: var(--red); }
+.cw-tr-fault-kind { margin: 0 0 2px; font-size: var(--text-sm, 13px); font-weight: 600; }
+.cw-tr-fault-says { margin: 0; font-size: var(--text-xs, 11px); line-height: 1.5; }
+.cw-tr-fault-try { margin-top: 4px; display: flex; flex-wrap: wrap; gap: 4px; }
+
+/* ---------------------------------------------------------------- the microphone */
+
+.cw-tr-mic { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.cw-tr-mic-said { margin: 0; font-size: var(--text-xs, 11px); line-height: 1.45; color: var(--faint); }
+.cw-tr-mic-bad { margin: 0; font-size: var(--text-xs, 11px); line-height: 1.45; color: var(--amber); }
+.cw-tr-mic-choices { display: flex; flex-wrap: wrap; gap: 4px; }
+
+/* ---------------------------------------------------------------- hints, and what a go established */
+
+.cw-tr-controls { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.cw-tr-hints { margin: 0; padding-left: 16px; display: flex; flex-direction: column; gap: 4px; font-size: var(--text-sm, 13px); line-height: 1.45; }
+
+.cw-tr-report { display: flex; flex-direction: column; gap: 8px; }
+.cw-tr-report-head { margin: 0; font-size: var(--text-md, 15px); font-weight: 600; }
+.cw-tr-yours { margin: 0; font-size: var(--text-sm, 13px); line-height: 1.5; }
+.cw-tr-worth { margin: 0; font-size: var(--text-sm, 13px); line-height: 1.5; color: var(--cyan); }
+
+/*
+ * What the attempt established, as sentences.
+ *
+ * Three kinds, and the three class names are written out here because the component builds them from the value's
+ * own name. What is settled is not the same as what went well: "the pieces could not be moved, so the line was held
+ * in your head" is a `yes` whether or not the line was right.
+ */
+.cw-tr-established { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.cw-tr-set {
+  padding: 4px 8px;
+  border-left: 3px solid var(--line);
+  font-size: var(--text-sm, 13px);
+  line-height: 1.5;
+}
+.cw-tr-set-yes { border-left-color: var(--cyan); }
+.cw-tr-set-no { border-left-color: var(--red); }
+.cw-tr-set-unknown { border-left-color: var(--faint); color: var(--faint); }
+
+/*
+ * The candidates somebody named, and how strongly each verdict may be put. Three class names again, built from the
+ * standing's own name: `refuted` is only ever used where a search produced the answers, so it is the only one that
+ * gets to look settled.
+ */
+.cw-tr-cand-verdicts { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: var(--text-xs, 11px); line-height: 1.5; }
+.cw-tr-stand-an-answer { color: var(--cyan); }
+.cw-tr-stand-refuted { color: var(--red); }
+.cw-tr-stand-not-recorded { color: var(--faint); }
+
+.cw-tr-answers { display: flex; flex-direction: column; gap: 4px; }
+.cw-tr-answers-label { margin: 0; font-size: var(--text-xs, 11px); line-height: 1.45; color: var(--faint); }
+.cw-tr-answers ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.cw-tr-answers li { font-family: var(--mono, monospace); font-size: var(--text-sm, 13px); }
+
+/* ---------------------------------------------------------------- the blindfold rounds */
+
+.cw-tr-ask { margin: 0; font-size: var(--text-sm, 13px); font-weight: 600; line-height: 1.45; }
+
+.cw-tr-moves { display: flex; flex-direction: column; gap: 4px; }
+.cw-tr-moves-label { margin: 0; font-size: var(--text-xs, 11px); line-height: 1.45; color: var(--faint); }
+.cw-tr-moves-list {
+  margin: 0;
+  padding: 8px 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm, 6px);
+  font-family: var(--mono, monospace);
+  font-size: var(--text-sm, 13px);
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+
+.cw-tr-questions { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.cw-tr-question { display: flex; flex-direction: column; gap: 4px; }
+
+.cw-tr-marks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.cw-tr-marks li { display: flex; flex-direction: column; gap: 2px; padding: 4px 8px; border-left: 3px solid var(--line); }
+.cw-tr-mark-ask { font-size: var(--text-xs, 11px); color: var(--faint); }
+.cw-tr-mark-says { font-size: var(--text-sm, 13px); line-height: 1.45; }
+.cw-tr-right { border-left-color: var(--cyan); }
+.cw-tr-wrong { border-left-color: var(--red); }
+
+.cw-tr-recallscore { display: flex; flex-direction: column; gap: 4px; }
+
+/* ---------------------------------------------------------------- the board somebody builds from memory */
+
+.cw-tr-recall { display: flex; flex-direction: column; gap: 8px; }
+.cw-tr-recall-label { margin: 0; font-size: var(--text-xs, 11px); line-height: 1.45; color: var(--faint); }
+
+.cw-tr-grid {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  width: 100%;
+  max-width: 340px;
+  aspect-ratio: 1 / 1;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm, 6px);
+  overflow: hidden;
+}
+
+.cw-tr-sq {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  background: color-mix(in srgb, var(--cyan) 4%, transparent);
+  color: var(--text);
+  font-size: min(5cqw, 26px);
+  line-height: 1;
+  cursor: pointer;
+}
+.cw-tr-sq-dark { background: color-mix(in srgb, var(--cyan) 14%, transparent); }
+.cw-tr-sq-on { box-shadow: inset 0 0 0 2px var(--cyan); }
+.cw-tr-sq:focus-visible { outline: 2px solid var(--cyan); outline-offset: -2px; }
+
+.cw-tr-palette { display: flex; flex-direction: column; gap: 4px; }
+.cw-tr-palette-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.cw-tr-palette-side { min-width: 3.5em; font-size: var(--text-xs, 11px); color: var(--faint); }
+.cw-tr-palette-piece {
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm, 6px);
+  background: none;
+  color: var(--text);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+.cw-tr-palette-piece:hover { border-color: var(--cyan); background: color-mix(in srgb, var(--cyan) 10%, transparent); }
+.cw-tr-palette-piece:focus-visible { outline: 2px solid var(--cyan); outline-offset: -2px; }
+
+/* ---------------------------------------------------------------- a whole game with the board hidden */
+
+/* The whole-game screen is laid out by `TrainStage` as well, so there is nothing left for this to do. */
+.cw-tr-state { margin: 0; font-size: var(--text-sm, 13px); font-weight: 600; line-height: 1.45; }
+.cw-tr-said {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-height: 16em;
+  overflow-y: auto;
+  font-size: var(--text-xs, 11px);
+  line-height: 1.5;
+}
+
+/* ---------------------------------------------------------------- narrow
+   Beside the chat sidebar this screen is about 600px wide. The container is `cw-screen`, the Chess World screen's
+   own, because the window's width is not what is running out of room. */
+
+/* Narrow is the stage's own business now: it moves the panel under the board and the board keeps the width. */
+
+@container cw-screen (max-width: 760px) {
+  .cw-tr-gym,
+  .cw-tr-blind { flex-direction: column; gap: 8px; }
+  /*
+   * The list of things to do, along the top.
+   *
+   * It was 13em, which is two and a half rows of a list of thirteen: the third position was sliced through the
+   * middle of its own description with nothing to say the box scrolled, while the pane under it -- holding one
+   * centred sentence -- had four hundred empty pixels. 42vh shows six, and the snapping is what stops a row being
+   * cut in half, because a row cut in half is what made it read as broken rather than as scrollable.
+   */
+  .cw-tr-side {
+    flex: 0 0 auto;
+    max-height: 42vh;
+    padding-right: 0;
+    padding-bottom: 8px;
+    border-right: none;
+    border-bottom: 1px solid var(--line);
+    scroll-snap-type: y proximity;
+  }
+  .cw-tr-item { scroll-snap-align: start; }
+  .cw-tr-dials { flex-direction: column; gap: 4px; }
+  .cw-tr-row { grid-template-columns: 3em 1fr 1fr; }
+}
+
+/* A piece in a trainer is the same drawing as a piece on a board; `../pieces.tsx` draws both. */
+.cw-tr-man { width: 82%; height: 82%; pointer-events: none; user-select: none; }
+.cw-tr-palette-piece .cw-tr-man { width: 24px; height: 24px; }

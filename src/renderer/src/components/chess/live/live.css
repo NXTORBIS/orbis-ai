@@ -1,0 +1,445 @@
+/*
+ * Live Chess.
+ *
+ * Every class starts cw-live- so that no other stylesheet can reach into this one, or it into another. The area
+ * is its own container query context rather than asking about the window: what runs out of room here is the panel
+ * this screen sits in, which is narrower than the window by a sidebar and may be narrower again.
+ *
+ * Nothing in here animates, anywhere, and that is deliberate rather than an omission. A pulse, a shimmer or a
+ * spinner over a live board is a promise that something is arriving, and in a classical game nothing arrives for
+ * twenty minutes at a stretch. The honest signals are a static colour and a line of text that says how long ago
+ * the last move came.
+ */
+
+.cw-live {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  flex: 1 1 auto;
+  /* Without this the column is at least as tall as its content, and the stage inside it has no height to measure
+     the board against -- which is how a board ends up drawn at its smallest allowed size. */
+  min-height: 0;
+  container-type: inline-size;
+  container-name: cw-live-area;
+}
+
+/* ---- words used all over -------------------------------------------------------------------------------- */
+
+.cw-live-quiet {
+  margin: 0;
+  color: var(--faint);
+  font-size: var(--text-sm, 12px);
+  line-height: 1.5;
+}
+
+.cw-live-warn {
+  margin: 0;
+  padding: 8px 8px;
+  border: 1px solid color-mix(in srgb, var(--amber) 40%, var(--line));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--amber) 10%, transparent);
+  color: var(--text);
+  font-size: var(--text-sm, 12px);
+  line-height: 1.5;
+}
+
+.cw-live-sub {
+  margin: 0;
+  color: var(--text);
+  font-size: var(--text-sm, 12px);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  opacity: 0.75;
+}
+
+.cw-live-event {
+  margin: 0;
+  color: var(--text);
+  font-size: var(--text-md, 15px);
+  font-weight: 600;
+}
+
+.cw-live-pill {
+  padding: 2px 8px;
+  border: 1px solid var(--glass-border);
+  border-radius: 999px;
+  color: var(--faint);
+  font-size: var(--text-xs, 11px);
+  white-space: nowrap;
+}
+
+/* 3px above and below: a line of 13px text is a 15px-tall button, under the smallest thing a person can reliably
+   hit. The same correction is in the other four link-shaped buttons in Chess World. */
+.cw-live-link {
+  padding: 4px 0;
+  min-height: 17px;
+  border: 0;
+  background: transparent;
+  color: var(--cyan);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.cw-live-link:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+
+/*
+ * The one shape that says how things stand.
+ *
+ * A static dot, filled with a colour, and never on its own: every dot in this screen sits beside words saying the
+ * same thing, because a colour is not readable to everybody and four shades of the same hue are not readable to
+ * anybody.
+ */
+.cw-live-dot {
+  width: 9px;
+  height: 9px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--faint);
+}
+.cw-live-dot.is-live { background: var(--green); }
+.cw-live-dot.is-soon { background: var(--cyan); }
+.cw-live-dot.is-over { background: var(--faint); }
+.cw-live-dot.is-unsure { background: var(--amber); }
+
+/* ---- faults --------------------------------------------------------------------------------------------- */
+
+.cw-live-fault {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 12px;
+  border: 1px solid color-mix(in srgb, var(--red) 45%, var(--line));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--red) 8%, transparent);
+}
+.cw-live-fault-what { margin: 0; color: var(--text); font-size: var(--text-sm, 12px); line-height: 1.5; }
+.cw-live-fault-about { font-weight: 600; }
+.cw-live-fault-next { margin: 0; color: var(--faint); font-size: var(--text-sm, 12px); line-height: 1.5; }
+.cw-live-fault-where { margin: 0; color: var(--faint); font-size: var(--text-xs, 11px); font-family: var(--mono, monospace); }
+.cw-live-fault-do { display: flex; gap: 8px; }
+
+/* ---- the dashboard -------------------------------------------------------------------------------------- */
+
+.cw-live-dash { display: flex; flex-direction: column; gap: 8px; min-height: 0; }
+.cw-live-dash-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+
+.cw-live-tours {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 8px;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.cw-live-tour {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 12px;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  background: var(--bg-mid);
+}
+.cw-live-tour-top { display: flex; align-items: center; gap: 8px; }
+.cw-live-tour-name { margin: 0; flex: 1; min-width: 0; font-size: var(--text-md, 15px); overflow-wrap: anywhere; }
+
+.cw-live-rounds { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+
+.cw-live-round {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.cw-live-round small { color: var(--faint); font-size: var(--text-xs, 11px); }
+/*
+ * A round the provider holds back on purpose. Marked, because it changes whether anything may be called live.
+ *
+ * Written as a descendant rather than as a bare class so it beats `.cw-live-round small` on specificity without
+ * reaching for `!important`, which would then have to be beaten by another `!important` later.
+ */
+.cw-live-round .cw-live-delay { color: var(--amber); }
+.cw-live-round:hover { border-color: var(--cyan); }
+.cw-live-round:focus-visible { outline: 2px solid var(--cyan); outline-offset: 1px; }
+
+/* ---- a round ------------------------------------------------------------------------------------------- */
+
+.cw-live-bar { display: flex; align-items: flex-start; gap: 12px; }
+.cw-live-barwords { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+
+/* Switching round inside a tournament, when the provider listed more than one of them. */
+.cw-live-roundstrip { display: flex; flex-wrap: wrap; gap: 4px; }
+.cw-live-roundtab {
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--faint);
+  font: inherit;
+  font-size: var(--text-sm, 12px);
+  cursor: pointer;
+}
+.cw-live-roundtab:hover { border-color: var(--cyan); }
+.cw-live-roundtab:focus-visible { outline: 2px solid var(--cyan); outline-offset: 1px; }
+.cw-live-roundtab.on { border-color: var(--cyan); background: color-mix(in srgb, var(--cyan) 14%, transparent); color: var(--text); }
+
+.cw-live-round-body {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  min-height: 0;
+  min-width: 0;
+}
+.cw-live-watchside { flex: 1 1 auto; min-width: 0; }
+
+/*
+ * Watching a game that has really arrived: the shared stage takes the whole room.
+ *
+ * No gap and no padding of its own, because the stage brings its own, and `min-height: 0` because without it the
+ * row is at least as tall as the board inside it and the stage has no height left to measure the board against.
+ */
+.cw-live-round-body.is-watching { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; gap: 0; }
+
+/* ---- the viewer ----------------------------------------------------------------------------------------- */
+
+.cw-live-viewer { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.cw-live-waiting {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+}
+.cw-live-where { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+
+/*
+ * How current the position is.
+ *
+ * The four states get four different borders as well as four different words, because a border is visible at a
+ * glance from across a desk and the words are what actually say it.
+ */
+.cw-live-badge {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  padding: 8px 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  font-size: var(--text-sm, 12px);
+  line-height: 1.5;
+}
+.cw-live-badge strong { color: var(--text); }
+.cw-live-badge span:not(.cw-live-dot) { color: var(--faint); }
+.cw-live-badge .cw-live-dot { align-self: center; }
+.cw-live-badge.is-live { border-color: color-mix(in srgb, var(--green) 45%, var(--line)); }
+.cw-live-badge.is-live .cw-live-dot { background: var(--green); }
+.cw-live-badge.is-delayed { border-color: color-mix(in srgb, var(--cyan) 45%, var(--line)); }
+.cw-live-badge.is-delayed .cw-live-dot { background: var(--cyan); }
+.cw-live-badge.is-stale { border-color: color-mix(in srgb, var(--amber) 55%, var(--line)); background: color-mix(in srgb, var(--amber) 9%, transparent); }
+.cw-live-badge.is-stale .cw-live-dot { background: var(--amber); }
+.cw-live-badge.is-unknown { border-color: var(--line); }
+.cw-live-badge.is-unknown .cw-live-dot { background: var(--faint); }
+
+.cw-live-correction {
+  margin: 0;
+  padding: 8px 8px;
+  border: 1px solid color-mix(in srgb, var(--amber) 55%, var(--line));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--amber) 12%, transparent);
+  color: var(--text);
+  font-size: var(--text-sm, 12px);
+  line-height: 1.5;
+}
+
+/* The two names beside the board, each with its clock. */
+.cw-live-side {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.cw-live-who { display: inline-flex; align-items: baseline; gap: 4px; min-width: 0; font-size: var(--text-sm, 12px); }
+.cw-live-who.is-big { font-size: var(--text-md, 15px); }
+.cw-live-title {
+  padding: 1px 4px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--cyan) 18%, transparent);
+  color: var(--cyan);
+  font-size: var(--text-xs, 11px);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+.cw-live-name { color: var(--text); overflow-wrap: anywhere; }
+/*
+ * A colour standing in for a name nobody sent.
+ *
+ * Italic and dimmed, so it never reads as a name. It carries its own explanation as a tooltip and a title
+ * attribute, because a reader who cannot see the styling still has to be told it is not a name.
+ */
+.cw-live-noname { color: var(--faint); font-style: italic; }
+.cw-live-rating { color: var(--faint); font-size: var(--text-xs, 11px); font-variant-numeric: tabular-nums; }
+
+.cw-live-clock {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 3px 8px;
+  border: 1px solid var(--glass-border);
+  border-radius: 6px;
+  font-family: var(--mono, monospace);
+  font-variant-numeric: tabular-nums;
+}
+.cw-live-clock-time { color: var(--text); font-size: var(--text-md, 15px); }
+/*
+ * A clock this computer worked out.
+ *
+ * Dashed, dimmer, and wearing the word "counted here". Three signals for one fact, because the fact is that the
+ * number is not the source's and a watcher reading it as the source's would be reading a guess as a reading.
+ */
+.cw-live-clock.is-counted { border-style: dashed; border-color: var(--line); }
+.cw-live-clock.is-counted .cw-live-clock-time { color: var(--faint); }
+.cw-live-counted { color: var(--faint); font-family: var(--font, inherit); font-size: var(--text-xs, 11px); }
+
+/*
+ * The board being shown is not the current position.
+ *
+ * A ring round the whole arrangement and a band of words above the board. The ring alone would be a colour
+ * nobody has been told the meaning of; the words alone are easy to read past when the board has your attention.
+ */
+.cw-live-stage.is-past {
+  outline: 2px dashed color-mix(in srgb, var(--amber) 60%, var(--line));
+  outline-offset: -4px;
+  border-radius: 10px;
+}
+.cw-live-past {
+  margin: 0;
+  color: var(--text);
+  font-size: var(--text-sm, 12px);
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+/*
+ * Above and below the board, inside the shared stage.
+ *
+ * Each side's name and clock sit against the edge of the board they are playing from, which is where a player
+ * looks for them, and the buttons that walk the game sit under the board rather than beside the moves.
+ */
+.cw-live-above, .cw-live-below { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.cw-live-state { margin: 0; color: var(--faint); font-size: var(--text-sm, 12px); }
+
+/* The move list fills the column beside the board rather than being capped in the middle of it. */
+.cw-live-movelist { flex: 1 1 auto; min-height: 140px; }
+
+/*
+ * The clock beside a move.
+ *
+ * Drawn by the shared move list from what the provider published with that move. It is not a judgement about the
+ * move -- this screen judges nothing -- so it is dim and in the monospaced face, which is how every other figure
+ * that came off the feed is written.
+ */
+.cw-live-stage .cw-ml-note.is-clock {
+  color: var(--faint);
+  font-family: var(--mono, monospace);
+  font-variant-numeric: tabular-nums;
+  font-weight: 400;
+}
+
+/*
+ * The games of the round, as the column beside the board.
+ *
+ * The list is a fixed-width column of its own when it stands alone, and in the stage it is a column that fills
+ * the height it is given -- so the heights are taken off here rather than left to cap it halfway down.
+ */
+.cw-live-stage .cw-live-boards { flex: 1 1 auto; max-width: none; }
+.cw-live-stage .cw-live-gamelist { max-height: none; }
+
+.cw-live-keep {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.cw-live-keeprow { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* ---- the games in the round ----------------------------------------------------------------------------- */
+
+.cw-live-boards {
+  flex: 0 0 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  max-width: 420px;
+}
+.cw-live-gamelist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 0;
+  max-height: 68vh;
+  overflow-y: auto;
+}
+.cw-live-gamerow {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 22px 1fr;
+  gap: 2px 8px;
+  padding: 8px 8px;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.cw-live-gamerow:hover { border-color: var(--cyan); }
+.cw-live-gamerow:focus-visible { outline: 2px solid var(--cyan); outline-offset: 1px; }
+.cw-live-gamerow.is-watching { border-color: var(--cyan); background: color-mix(in srgb, var(--cyan) 10%, transparent); }
+.cw-live-boardno {
+  grid-row: span 2;
+  align-self: center;
+  color: var(--faint);
+  font-family: var(--mono, monospace);
+  font-size: var(--text-xs, 11px);
+  text-align: right;
+}
+.cw-live-pair { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px; min-width: 0; }
+.cw-live-vs { color: var(--faint); }
+.cw-live-gamefacts { grid-column: 2; color: var(--faint); font-size: var(--text-xs, 11px); }
+
+/*
+ * Narrow: the games list goes under the board rather than squeezing it.
+ *
+ * Asked of this area's own width, not the window's. This screen sits inside a panel inside a window with a
+ * sidebar, so the window's width has never been the thing running out of room.
+ */
+@container cw-live-area (max-width: 820px) {
+  .cw-live-round-body { flex-direction: column; }
+  .cw-live-boards { flex: 1 1 auto; max-width: none; }
+  .cw-live-gamelist { max-height: 40vh; }
+  .cw-live-tours { grid-template-columns: 1fr; }
+}

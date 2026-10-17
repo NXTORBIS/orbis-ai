@@ -1,0 +1,326 @@
+/*
+ * The position editor. Every class starts cw-ed- so neither this stylesheet nor any other can reach into the other.
+ *
+ * The layout asks its own root how wide it is, never the window: this screen sits beside a sidebar, and inside a panel
+ * narrower still, so the width of the window is not the thing running out of room.
+ */
+.cw-ed-view {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  container-type: inline-size;
+  container-name: cw-ed-screen;
+}
+
+.cw-ed-main {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+  min-height: 0;
+  padding: 16px 20px;
+}
+
+.cw-ed-boardside {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+/*
+ * The men sit in a layer over the board.
+ *
+ * The board underneath draws the squares and nothing else -- it is given an empty position on purpose -- so this layer
+ * holds every piece on screen and takes every click. Both are exactly the board's own box, so square for square they
+ * line up: the stage shrinks to the board, and the layer is pinned to the stage.
+ */
+.cw-ed-stage {
+  position: relative;
+  display: block;
+  width: 100%;
+  max-width: min(560px, 72vh);
+}
+.cw-ed-under { display: block; }
+
+/*
+ * The board is given a width it can actually use.
+ *
+ * On its own the board is `min(72vh, 100%)` inside a shrink-to-fit wrapper, and a percentage inside a shrink-to-fit
+ * box resolves against the content -- which here is an empty board with nothing in it. It came out zero wide, and
+ * every man was drawn into a strip at the top of the screen. Sizing the stage and telling both the wrapper and the
+ * board to fill it gives the percentage something real to measure, and it makes the layer of men exactly the board's
+ * own box, which is what keeps the squares lined up.
+ */
+.cw-ed-under .cw-board-wrap { display: block; width: 100%; }
+.cw-ed-under .cw-board { width: 100%; }
+
+.cw-ed-squares {
+  position: absolute;
+  /* The board's one-pixel border sits inside its box, so the squares start one pixel in and so does this. */
+  inset: 1px;
+  display: grid;
+  grid-template-rows: repeat(8, 1fr);
+  container-type: inline-size;
+}
+.cw-ed-rank { display: grid; grid-template-columns: repeat(8, 1fr); }
+
+.cw-ed-sq {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  line-height: 1;
+  cursor: pointer;
+}
+.cw-ed-sq:focus-visible { outline: 2px solid var(--cyan); outline-offset: -3px; }
+/* Held, and said with a ring rather than with colour alone. */
+.cw-ed-sq.is-held { box-shadow: inset 0 0 0 3px var(--cyan); }
+.cw-ed-sq.is-cursor { outline: 2px dashed var(--cyan); outline-offset: -4px; }
+
+/* The same characters the board draws, with the same outline so a white piece stays visible on a light square. */
+/* A piece in the editor is the same drawing as a piece on a board; `../pieces.tsx` draws both, and the colours
+   come from the board theme through the same variables, so the palette cannot drift from the board beside it. */
+.cw-ed-man {
+  width: 84%;
+  height: 84%;
+  user-select: none;
+  pointer-events: none;
+}
+
+.cw-ed-under-board { display: flex; flex-wrap: wrap; gap: 4px; }
+
+.cw-ed-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 280px;
+  max-width: 460px;
+}
+
+/* ---- the palette */
+
+.cw-ed-palette { display: flex; flex-direction: column; gap: 4px; }
+.cw-ed-row { display: flex; flex-wrap: wrap; gap: 4px; align-items: flex-end; }
+.cw-ed-column { display: flex; flex-direction: column; gap: 4px; }
+
+/*
+ * A swatch is a square of board.
+ *
+ * The colour is the board's own dark square rather than a theme colour, and it has to be: a black king is drawn
+ * almost black, as it is on the board, and on the window's dark pill it disappeared completely -- six buttons that
+ * looked empty. Pieces are only legible against a board, so the palette gives them one.
+ */
+.cw-ed-swatch {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md, 10px);
+  background: #4f6076;
+  color: var(--text);
+  cursor: pointer;
+}
+.cw-ed-swatch:hover, .cw-ed-swatch:focus-visible { border-color: var(--cyan); outline: none; }
+.cw-ed-swatch.is-chosen { border-color: var(--cyan); box-shadow: 0 0 0 2px var(--cyan); }
+.cw-ed-swatch .cw-ed-man { width: 28px; height: 28px; }
+/* The name is there for anything reading the page out; the glyph is there for everybody else. */
+.cw-ed-swatch-name {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.cw-ed-tool {
+  padding: 4px 12px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-pill, 999px);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-sm, 13px);
+  cursor: pointer;
+}
+.cw-ed-tool:hover, .cw-ed-tool:focus-visible { border-color: var(--cyan); outline: none; }
+.cw-ed-tool.is-chosen { border-color: var(--cyan); background: color-mix(in srgb, var(--cyan) 20%, transparent); }
+
+.cw-ed-hint { margin: 0; color: var(--faint); font-size: var(--text-sm, 13px); }
+
+/* ---- the controls */
+
+.cw-ed-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md, 10px);
+  background: color-mix(in srgb, var(--bg-mid) 60%, transparent);
+  min-width: 0;
+}
+.cw-ed-label {
+  color: var(--text);
+  font-size: var(--text-sm, 13px);
+  font-weight: 600;
+  padding: 0;
+}
+.cw-ed-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+  font-size: var(--text-sm, 13px);
+  cursor: pointer;
+}
+.cw-ed-check input { accent-color: var(--cyan); }
+
+.cw-ed-select, .cw-ed-text {
+  width: 100%;
+  padding: 4px 8px;
+  border: 1px solid var(--input-border, var(--line));
+  border-radius: var(--radius-sm, 6px);
+  background: var(--input-bg, transparent);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-sm, 13px);
+}
+.cw-ed-select:focus-visible, .cw-ed-text:focus-visible { border-color: var(--cyan); outline: none; }
+.cw-ed-text.is-fen { font-family: var(--mono, monospace); font-size: var(--text-xs, 11px); }
+.cw-ed-text.is-number { max-width: 110px; }
+.cw-ed-text[aria-invalid='true'], .cw-ed-select[aria-invalid='true'] { border-color: var(--red); }
+
+.cw-ed-note {
+  margin: 0;
+  color: var(--faint);
+  font-size: var(--text-sm, 13px);
+  line-height: 1.5;
+}
+.cw-ed-note.is-wrong { color: var(--red); }
+
+/* ---- what is wrong, and what is only unusual */
+
+.cw-ed-report { display: flex; flex-direction: column; gap: 8px; }
+
+.cw-ed-verdict {
+  margin: 0;
+  color: var(--text);
+  font-size: var(--text-md, 15px);
+}
+.cw-ed-verdict.is-wrong { color: var(--red); }
+
+.cw-ed-block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--line);
+  border-radius: var(--radius-md, 10px);
+}
+/* The two kinds of wrong never look alike: one is refused, the other is simply remarked on. */
+.cw-ed-block.is-wrong { border-left-color: var(--red); background: color-mix(in srgb, var(--red) 8%, transparent); }
+.cw-ed-block.is-odd { border-left-color: var(--amber); background: color-mix(in srgb, var(--amber) 8%, transparent); }
+
+.cw-ed-block-title { margin: 0; font-size: var(--text-sm, 13px); color: var(--text); }
+
+.cw-ed-faults {
+  margin: 0;
+  padding-left: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--text);
+  font-size: var(--text-sm, 13px);
+  line-height: 1.5;
+}
+.cw-ed-where { color: var(--faint); font-family: var(--mono, monospace); }
+
+.cw-ed-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+.cw-ed-facts dt { color: var(--faint); font-size: var(--text-xs, 11px); }
+.cw-ed-facts dd { margin: 2px 0 0; color: var(--text); font-size: var(--text-sm, 13px); }
+
+.cw-ed-actions { display: flex; flex-direction: column; gap: 4px; }
+
+/* ---- which games Orbis plays */
+
+.cw-ed-variants {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md, 10px);
+}
+.cw-ed-ask { color: var(--faint); font-size: var(--text-xs, 11px); }
+.cw-ed-answer { margin: 0; color: var(--text); font-size: var(--text-sm, 13px); line-height: 1.5; }
+.cw-ed-answer.is-wrong { color: var(--amber); }
+
+.cw-ed-disclose {
+  align-self: flex-start;
+  /* Same as the puzzle screen's link: three pixels either side of a nine-pixel line is a fifteen-pixel target. */
+  padding: 4px 0;
+  min-height: 17px;
+  border: 0;
+  background: transparent;
+  color: var(--cyan);
+  font: inherit;
+  font-size: var(--text-sm, 13px);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.cw-ed-variant-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 40vh;
+  overflow-y: auto;
+}
+.cw-ed-variant-list li { display: flex; flex-direction: column; gap: 2px; }
+.cw-ed-variant-list strong { color: var(--text); font-size: var(--text-sm, 13px); }
+.cw-ed-can { color: var(--faint); font-size: var(--text-xs, 11px); }
+
+/* The panel goes under the board rather than squeezing it, measured against this screen and not the window. */
+@container cw-ed-screen (max-width: 880px) {
+  .cw-ed-main { flex-direction: column; }
+  .cw-ed-panel { max-width: none; width: 100%; }
+}
+
+/*
+ * Narrower still, the board stops growing.
+ *
+ * Stacked, the stage takes the whole column, and at 600px that is a 560px board in an area 630px tall: the board
+ * was the entire first screenful and the palette of men -- the one thing this screen is for -- was below the fold
+ * along with the other hundred and sixty controls. Capped at 420 the palette's first row is on screen under the
+ * board, which is what says there is more to scroll to.
+ *
+ * The side padding comes down with it. 20px either side of a 586px area is 7% of the room on a screen whose
+ * swatches are 44px wide, and it was pushing a row of six men onto two lines.
+ */
+@container cw-ed-screen (max-width: 760px) {
+  .cw-ed-main { padding: 12px 8px; gap: 12px; }
+  .cw-ed-stage { max-width: min(420px, 72vh); }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .cw-ed-swatch, .cw-ed-tool { transition: border-color 0.12s ease, background 0.12s ease; }
+}

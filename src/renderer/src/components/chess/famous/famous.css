@@ -1,0 +1,244 @@
+/*
+ * Famous games.
+ *
+ * Every class starts cw-fm- so nothing in the window can reach into this screen and this screen cannot reach
+ * anything else. The guard in src/shared/cssCollisions.test.ts fails if any of these names is defined twice.
+ *
+ * The board, its size and the three columns are the shared stage's business (stage.css). What is here is the
+ * collection on the left, the words on the right, and the line about the collection underneath. Nothing in this
+ * file sets a width on the board: this screen used to be one of the eight that let it collapse.
+ *
+ * Every colour is one of the window's own tokens with a fallback, because a wrong token name fails silently and
+ * leaves grey text on grey.
+ */
+
+.cw-fm-root {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+}
+
+/* ---------------------------------------------------------------- the collection, on the left */
+
+.cw-fm-browse {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2, 8px);
+  min-height: 0;
+  min-width: 0;
+}
+
+.cw-fm-orders { display: flex; flex-wrap: wrap; gap: 4px; }
+.cw-fm-order {
+  padding: 3px 8px;
+  border: 1px solid var(--glass-border, rgba(160, 210, 255, 0.16));
+  border-radius: var(--radius-pill, 999px);
+  background: none;
+  color: var(--faint, #7f848f);
+  font: var(--text-xs, 11px) / 1.4 var(--font, sans-serif);
+  cursor: pointer;
+}
+.cw-fm-order:hover { border-color: var(--cyan, #3fd8ff); color: var(--text, #ededef); }
+.cw-fm-order:focus-visible { outline: 2px solid var(--cyan, #3fd8ff); outline-offset: 1px; }
+/* Which order is on: a fill, a border and heavier text, so it reads without the colour. */
+.cw-fm-order.on {
+  border-color: var(--cyan, #3fd8ff);
+  background: color-mix(in srgb, var(--cyan, #3fd8ff) 14%, transparent);
+  color: var(--text, #ededef);
+  font-weight: 700;
+}
+
+.cw-fm-orderwords, .cw-fm-did {
+  margin: 0;
+  font-size: var(--text-xs, 11px);
+  color: var(--faint, #7f848f);
+  line-height: 1.5;
+}
+.cw-fm-clear { margin-left: 6px; }
+
+.cw-fm-facets {
+  border: 1px solid var(--glass-border, rgba(160, 210, 255, 0.16));
+  border-radius: var(--radius-sm, 6px);
+  padding: 4px 8px;
+  font-size: var(--text-xs, 11px);
+}
+.cw-fm-facets summary { cursor: pointer; color: var(--text, #ededef); }
+.cw-fm-facet { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: 6px; }
+.cw-fm-facet-name { color: var(--faint, #7f848f); margin-right: 2px; }
+.cw-fm-count { color: var(--faint, #7f848f); font-variant-numeric: tabular-nums; }
+
+.cw-fm-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.cw-fm-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--glass-border, rgba(160, 210, 255, 0.16));
+  border-radius: var(--radius-sm, 6px);
+  background: none;
+  color: var(--text, #ededef);
+  text-align: left;
+  cursor: pointer;
+}
+.cw-fm-item:hover { border-color: var(--cyan, #3fd8ff); background: color-mix(in srgb, var(--cyan, #3fd8ff) 6%, transparent); }
+.cw-fm-item:focus-visible { outline: 2px solid var(--cyan, #3fd8ff); outline-offset: -2px; }
+/* The game on the board: a fill and a bar down the side, not a colour alone. */
+.cw-fm-item.is-open {
+  border-color: color-mix(in srgb, var(--cyan, #3fd8ff) 55%, transparent);
+  background: color-mix(in srgb, var(--cyan, #3fd8ff) 14%, transparent);
+  box-shadow: inset 3px 0 0 var(--cyan, #3fd8ff);
+}
+.cw-fm-item-name { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; font-size: var(--text-sm, 12px); }
+.cw-fm-item-line { color: var(--faint, #7f848f); font-size: var(--text-xs, 11px); }
+.cw-fm-nick { color: var(--cyan, #3fd8ff); font-style: italic; font-size: var(--text-xs, 11px); }
+
+/* ---------------------------------------------------------------- above the board */
+
+.cw-fm-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2, 8px); }
+.cw-fm-headwords { min-width: 0; }
+.cw-fm-title { margin: 0; font: 600 var(--text-lg, 15px) / 1.3 var(--display, sans-serif); }
+.cw-fm-line { margin: 0; font-size: var(--text-xs, 11px); color: var(--faint, #7f848f); }
+
+.cw-fm-panes { display: flex; gap: 4px; }
+.cw-fm-pane {
+  padding: 4px 10px;
+  border: 1px solid var(--glass-border, rgba(160, 210, 255, 0.16));
+  border-radius: var(--radius-tab, 8px);
+  background: none;
+  color: var(--faint, #7f848f);
+  font: var(--text-sm, 12px) / 1.4 var(--font, sans-serif);
+  cursor: pointer;
+}
+.cw-fm-pane:focus-visible { outline: 2px solid var(--cyan, #3fd8ff); outline-offset: 1px; }
+.cw-fm-pane.on {
+  border-color: var(--cyan, #3fd8ff);
+  background: color-mix(in srgb, var(--cyan, #3fd8ff) 14%, transparent);
+  color: var(--text, #ededef);
+  font-weight: 600;
+}
+
+/* ---------------------------------------------------------------- under the board */
+
+.cw-fm-under { margin: 0; font-size: var(--text-sm, 12px); color: var(--faint, #7f848f); }
+.cw-fm-result {
+  margin-left: 6px;
+  font: 700 var(--text-sm, 12px) / 1 var(--mono, monospace);
+  color: var(--text, #ededef);
+}
+
+/* ---------------------------------------------------------------- the words, on the right */
+
+.cw-fm-moves { flex: 1 1 auto; min-height: 160px; }
+
+/*
+ * A move the collection has words about.
+ *
+ * The mark is drawn by the shared move list, which colours the move classes it knows. This is not a move class --
+ * nothing here judges a move -- so it is named and coloured here, in the accent, scoped under this screen's own
+ * stage so no other area's list can pick it up.
+ */
+.cw-fm-stage .cw-ml-note.is-commentary { color: var(--cyan, #3fd8ff); }
+
+.cw-fm-ours {
+  padding: 6px 8px;
+  border: 1px solid var(--glass-border, rgba(160, 210, 255, 0.16));
+  border-left: 2px solid var(--cyan, #3fd8ff);
+  border-radius: var(--radius-sm, 6px);
+  background: color-mix(in srgb, var(--cyan, #3fd8ff) 6%, transparent);
+}
+.cw-fm-ours-who {
+  margin: 0 0 2px;
+  font: 700 var(--text-xs, 11px) / 1.4 var(--font, sans-serif);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--cyan, #3fd8ff);
+}
+.cw-fm-ours-text { margin: 0; font-size: var(--text-sm, 12px); line-height: 1.55; color: var(--text, #ededef); }
+.cw-fm-ours-at { margin: 4px 0 0; font-size: var(--text-xs, 11px); color: var(--faint, #7f848f); }
+
+.cw-fm-prov, .cw-fm-says, .cw-fm-checkfaults {
+  border: 1px solid var(--glass-border, rgba(160, 210, 255, 0.16));
+  border-radius: var(--radius-sm, 6px);
+  padding: 4px 8px;
+  font-size: var(--text-xs, 11px);
+  color: var(--faint, #7f848f);
+  line-height: 1.55;
+}
+.cw-fm-prov summary, .cw-fm-says summary, .cw-fm-checkfaults summary { cursor: pointer; color: var(--text, #ededef); }
+.cw-fm-prov-head { margin: 8px 0 2px; font-size: var(--text-xs, 11px); color: var(--text, #ededef); }
+.cw-fm-prov-text { margin: 0; }
+.cw-fm-prov-list { margin: 4px 0 0; padding-left: 16px; display: flex; flex-direction: column; gap: 2px; }
+.cw-fm-ok { color: var(--green, #3ee58a); }
+.cw-fm-bad { color: var(--red, #ff4d6d); }
+
+/* ---------------------------------------------------------------- finding the move */
+
+.cw-fm-ask { display: flex; flex-direction: column; gap: var(--space-2, 8px); }
+.cw-fm-ask-head { margin: 0; font: 600 var(--text-sm, 12px) / 1.4 var(--font, sans-serif); }
+.cw-fm-since { display: flex; flex-direction: column; gap: 2px; margin: 0; font-size: var(--text-xs, 11px); }
+.cw-fm-since-name { color: var(--faint, #7f848f); }
+.cw-fm-since-moves { font-family: var(--mono, monospace); color: var(--text, #ededef); line-height: 1.5; }
+
+.cw-fm-typed { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.cw-fm-input {
+  flex: 1 1 100px;
+  min-width: 80px;
+  padding: 5px 8px;
+  border: 1px solid var(--input-border, rgba(160, 210, 255, 0.16));
+  border-radius: var(--radius-control, 8px);
+  background: var(--input-bg, rgba(0, 0, 0, 0.3));
+  color: var(--text, #ededef);
+  font: var(--text-sm, 12px) / 1.4 var(--mono, monospace);
+}
+.cw-fm-input:focus-visible { outline: 2px solid var(--cyan, #3fd8ff); outline-offset: 1px; }
+
+/*
+ * What the answer was.
+ *
+ * Three different answers and three different borders as well as three colours: matched the game, legal but a
+ * different move, and not a legal move at all. The third is not a wrong answer -- it is not an answer.
+ */
+.cw-fm-verdict {
+  margin: 0;
+  padding: 5px 8px;
+  border-left: 2px solid var(--faint, #7f848f);
+  border-radius: var(--radius-sm, 6px);
+  font-size: var(--text-sm, 12px);
+  line-height: 1.5;
+}
+.cw-fm-verdict.is-match { border-left-color: var(--green, #3ee58a); color: var(--green, #3ee58a); }
+.cw-fm-verdict.is-other { border-left-color: var(--cyan, #3fd8ff); color: var(--text, #ededef); }
+.cw-fm-verdict.is-illegal { border-left-color: var(--amber, #ffbe4d); color: var(--amber, #ffbe4d); }
+
+.cw-fm-played { margin: 0; font-size: var(--text-sm, 12px); color: var(--text, #ededef); }
+.cw-fm-progress { margin: 0; font-size: var(--text-xs, 11px); color: var(--faint, #7f848f); }
+.cw-fm-caveat { margin: 0; font-size: var(--text-xs, 11px); color: var(--faint, #7f848f); line-height: 1.5; }
+
+/* ---------------------------------------------------------------- the collection itself, underneath */
+
+.cw-fm-foot {
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2, 8px);
+  padding: 4px var(--space-4, 16px) var(--space-2, 8px);
+  border-top: 1px solid var(--line, rgba(255, 255, 255, 0.09));
+}
+.cw-fm-checked { margin: 0; font-size: var(--text-xs, 11px); color: var(--faint, #7f848f); }
+.cw-fm-says-text { margin: 4px 0 0; max-width: 70ch; }
+.cw-fm-checkfaults { border-left: 2px solid var(--amber, #ffbe4d); }
+.cw-fm-checkfaults ul { margin: 4px 0 0; padding-left: 16px; display: flex; flex-direction: column; gap: 2px; }

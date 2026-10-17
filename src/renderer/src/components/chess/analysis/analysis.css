@@ -1,0 +1,496 @@
+/*
+ * Analysis Studio. Every class here starts cw-an- so nothing in the window can reach into it and it cannot reach
+ * out. The layout answers to the screen it sits in rather than to the window, through the cw-screen container the
+ * Chess World root declares: beside an open side panel the screen is far narrower than the window, and a window
+ * query would lay out for a width this screen has not got.
+ */
+
+.cw-an-studio {
+  display: flex;
+  gap: 16px;
+  flex: 1;
+  min-height: 0;
+  align-items: flex-start;
+}
+
+.cw-an-boardside {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  flex: 0 1 auto;
+}
+
+.cw-an-boardrow { display: flex; gap: 8px; align-items: stretch; min-width: 0; }
+
+.cw-an-under { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.cw-an-nav { display: flex; gap: 4px; }
+.cw-an-state { color: var(--faint); font-size: var(--text-sm, 13px); }
+
+.cw-an-panel {
+  flex: 1 1 320px;
+  min-width: 0;
+  max-width: 460px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+  max-height: 100%;
+}
+
+.cw-an-tabs { display: flex; gap: 4px; }
+.cw-an-tab {
+  padding: 4px 12px;
+  border: 1px solid var(--glass-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--faint);
+  font: inherit;
+  cursor: pointer;
+}
+.cw-an-tab.on { color: var(--text); border-color: var(--cyan); background: color-mix(in srgb, var(--cyan) 14%, transparent); }
+.cw-an-tab:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+
+.cw-an-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.cw-an-faint { margin: 0; color: var(--faint); font-size: var(--text-sm, 13px); line-height: 1.5; }
+.cw-an-h { margin: 4px 0 0; font-size: var(--text-sm, 13px); color: var(--text); }
+.cw-an-empty { margin: 0; color: var(--faint); font-size: var(--text-sm, 13px); }
+.cw-an-said { margin: 0; color: var(--cyan); font-size: var(--text-sm, 13px); }
+
+/* Anything the screen cannot do, or cannot know, is said in this one shape so it reads the same everywhere. */
+.cw-an-warn {
+  margin: 0;
+  padding: 8px 8px;
+  border: 1px solid var(--glass-border);
+  border-left: 3px solid var(--cyan);
+  border-radius: 6px;
+  background: var(--bg-mid);
+  color: var(--text);
+  font-size: var(--text-sm, 13px);
+  line-height: 1.5;
+}
+.cw-an-warn code { font-family: var(--mono, monospace); font-size: var(--text-xs, 11px); }
+/* 3px above and below: a line of 13px text is a 15px-tall button, under the smallest thing a person can reliably
+   hit. The same correction is in the other four link-shaped buttons in Chess World. */
+.cw-an-link {
+  border: 0;
+  background: none;
+  padding: 4px 0;
+  min-height: 17px;
+  color: var(--cyan);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* ---- the bar beside the board */
+
+.cw-an-bar {
+  position: relative;
+  width: 18px;
+  min-height: 160px;
+  border: 1px solid var(--glass-border);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--text) 86%, transparent);
+  overflow: hidden;
+}
+.cw-an-bar-dark {
+  position: absolute;
+  inset: auto 0 0 0;
+  background: color-mix(in srgb, var(--bg-mid) 92%, black);
+  transition: height 160ms ease;
+}
+.cw-an-bar.is-unknown { background: var(--bg-mid); }
+.cw-an-bar.is-unknown .cw-an-bar-dark { display: none; }
+.cw-an-bar-text {
+  position: absolute;
+  inset: auto 0 2px 0;
+  text-align: center;
+  font-family: var(--mono, monospace);
+  font-size: 10px;
+  color: var(--faint);
+  mix-blend-mode: difference;
+}
+
+/* ---- the graph */
+
+.cw-an-graph { margin: 0; display: flex; flex-direction: column; gap: 4px; }
+.cw-an-graph svg { width: 100%; height: 86px; display: block; cursor: pointer; }
+.cw-an-graph-bg { fill: var(--bg-mid); stroke: var(--glass-border); stroke-width: 1; }
+/* A stretch nobody searched is shaded, so the hole is something you can see rather than something you notice. */
+.cw-an-graph-gap { fill: color-mix(in srgb, var(--faint) 18%, transparent); }
+.cw-an-graph-mid { stroke: var(--line); stroke-width: 1; stroke-dasharray: 3 3; }
+.cw-an-graph-line { stroke: var(--cyan); stroke-width: 2; stroke-linejoin: round; }
+.cw-an-graph-dot { fill: var(--cyan); }
+.cw-an-graph-now { stroke: var(--text); stroke-width: 1; opacity: 0.6; }
+.cw-an-graph-note { margin: 0; color: var(--faint); font-size: var(--text-xs, 11px); line-height: 1.5; }
+
+/* ---- the move list */
+
+.cw-an-moves {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-height: 38vh;
+  overflow-y: auto;
+  font-family: var(--mono, monospace);
+  font-size: var(--text-sm, 13px);
+}
+.cw-an-mv { display: flex; align-items: baseline; gap: 4px; min-width: 0; }
+/* A variation does not look like the game: it is set in, quieter, and in italics. */
+.cw-an-mv.is-branch { color: var(--faint); font-style: italic; }
+.cw-an-number { color: var(--faint); }
+.cw-an-open, .cw-an-close { color: var(--faint); }
+
+.cw-an-move {
+  padding: 1px 4px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.cw-an-move.is-main { color: var(--text); font-style: normal; }
+.cw-an-move:hover { border-color: var(--glass-border); }
+.cw-an-move.is-here { background: color-mix(in srgb, var(--cyan) 24%, transparent); border-color: var(--cyan); color: var(--text); }
+.cw-an-move.is-bad { color: color-mix(in srgb, var(--text) 55%, #ff6b6b); }
+.cw-an-move.is-poor { color: color-mix(in srgb, var(--text) 65%, #ffa94d); }
+.cw-an-move:focus-visible { outline: 2px solid var(--cyan); outline-offset: 1px; }
+.cw-an-mark { margin-inline-start: 2px; }
+.cw-an-nag { margin-inline-start: 2px; color: var(--cyan); }
+.cw-an-score { color: var(--faint); font-size: var(--text-xs, 11px); }
+.cw-an-note-dot { color: var(--cyan); font-size: 10px; }
+.cw-an-played {
+  padding: 0 4px;
+  border: 1px solid var(--glass-border);
+  border-radius: 999px;
+  color: var(--faint);
+  font-family: var(--sans, inherit);
+  font-size: var(--text-xs, 11px);
+  font-style: normal;
+}
+
+/* ---- the engine panel */
+
+.cw-an-engine { display: flex; flex-direction: column; gap: 8px; }
+.cw-an-status { margin: 0; color: var(--text); font-size: var(--text-sm, 13px); }
+.cw-an-field { display: flex; flex-direction: column; gap: 4px; font-size: var(--text-sm, 13px); }
+.cw-an-seg { display: flex; gap: 4px; }
+.cw-an-select {
+  padding: 4px 8px;
+  border: 1px solid var(--glass-border);
+  border-radius: 6px;
+  background: var(--bg-mid);
+  color: var(--text);
+  font: inherit;
+}
+.cw-an-lines { display: flex; flex-direction: column; gap: 4px; }
+.cw-an-line {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px;
+  font-family: var(--mono, monospace);
+  font-size: var(--text-xs, 11px);
+}
+.cw-an-line-score { color: var(--text); min-width: 54px; }
+.cw-an-line-score.is-provisional { color: var(--faint); }
+.cw-an-line-depth { color: var(--faint); }
+.cw-an-line-moves { color: var(--text); min-width: 0; overflow-wrap: anywhere; }
+.cw-an-line-note { color: var(--faint); font-family: var(--sans, inherit); }
+
+/* ---- notes */
+
+.cw-an-notes { display: flex; flex-direction: column; gap: 4px; }
+.cw-an-nags { display: flex; gap: 4px; }
+.cw-an-nag-btn {
+  min-width: 30px;
+  padding: 3px 4px;
+  border: 1px solid var(--glass-border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--faint);
+  font: inherit;
+  cursor: pointer;
+}
+.cw-an-nag-btn.is-on { color: var(--text); border-color: var(--cyan); background: color-mix(in srgb, var(--cyan) 16%, transparent); }
+.cw-an-nag-btn:focus-visible { outline: 2px solid var(--cyan); outline-offset: 1px; }
+.cw-an-text {
+  width: 100%;
+  padding: 8px 8px;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  background: var(--bg-mid);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-sm, 13px);
+  resize: vertical;
+}
+.cw-an-text:focus-visible { outline: 2px solid var(--cyan); outline-offset: -1px; }
+/* What the file said is not what you said, so it never shares a box with your note. */
+.cw-an-source {
+  margin: 0;
+  padding: 8px 8px;
+  border: 1px dashed var(--glass-border);
+  border-radius: 10px;
+  color: var(--faint);
+  font-size: var(--text-sm, 13px);
+  line-height: 1.5;
+}
+.cw-an-source-tag { color: var(--cyan); font-size: var(--text-xs, 11px); text-transform: uppercase; letter-spacing: 0.04em; }
+
+/* ---- the report */
+
+.cw-an-report { display: flex; flex-direction: column; gap: 8px; }
+.cw-an-progress { margin: 0; color: var(--text); font-size: var(--text-sm, 13px); }
+.cw-an-summary { margin: 0; color: var(--text); font-size: var(--text-sm, 13px); line-height: 1.55; }
+
+.cw-an-figures { margin: 0; display: grid; grid-template-columns: 1fr; gap: 4px; }
+.cw-an-figures > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 8px;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+}
+.cw-an-figures dt { margin: 0; color: var(--faint); font-size: var(--text-sm, 13px); }
+.cw-an-figures dd { margin: 0; color: var(--text); font-size: var(--text-sm, 13px); text-align: right; }
+
+.cw-an-counts { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px; }
+.cw-an-counts li {
+  display: flex;
+  gap: 4px;
+  padding: 3px 8px;
+  border: 1px solid var(--glass-border);
+  border-radius: 999px;
+  color: var(--faint);
+  font-size: var(--text-xs, 11px);
+}
+.cw-an-counts strong { color: var(--text); }
+
+.cw-an-critical { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.cw-an-critical li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px;
+  padding: 4px 8px;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+}
+.cw-an-jump {
+  padding: 1px 4px;
+  border: 1px solid var(--cyan);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--cyan) 12%, transparent);
+  color: var(--text);
+  font-family: var(--mono, monospace);
+  font-size: var(--text-xs, 11px);
+  cursor: pointer;
+}
+.cw-an-why { flex: 1 1 180px; min-width: 0; color: var(--text); font-size: var(--text-sm, 13px); line-height: 1.5; }
+.cw-an-depth { color: var(--faint); font-size: var(--text-xs, 11px); }
+.cw-an-ignored { margin: 0; padding-inline-start: 18px; color: var(--faint); font-size: var(--text-xs, 11px); line-height: 1.6; }
+
+/* ---- whether the work is being kept, and the lines it is kept as */
+
+/* Always on screen, quiet when all is well and loud only when nothing was written. */
+.cw-an-keep { margin: 0; color: var(--faint); font-size: var(--text-xs, 11px); line-height: 1.5; }
+.cw-an-keep.is-refused {
+  padding: 4px 8px;
+  border: 1px solid var(--amber);
+  border-radius: 10px;
+  color: var(--text);
+  font-size: var(--text-sm, 13px);
+}
+
+.cw-an-lines { display: flex; flex-direction: column; gap: 8px; }
+.cw-an-ln-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.cw-an-ln {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 8px;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+}
+.cw-an-ln.is-picked { border-color: var(--cyan); background: color-mix(in srgb, var(--cyan) 10%, transparent); }
+.cw-an-ln-top { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; min-width: 0; }
+.cw-an-ln-name { color: var(--text); font-size: var(--text-sm, 13px); overflow-wrap: anywhere; }
+.cw-an-ln-input {
+  flex: 1 1 160px;
+  min-width: 0;
+  padding: 4px 8px;
+  border: 1px solid var(--glass-border);
+  border-radius: 6px;
+  background: var(--bg-mid);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-sm, 13px);
+}
+.cw-an-ln-input:focus-visible { outline: 2px solid var(--cyan); outline-offset: -1px; }
+
+/* ---- two end positions, side by side */
+
+.cw-an-compare { display: flex; flex-direction: column; gap: 8px; }
+.cw-an-cmp-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.cw-an-cmp-side { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.cw-an-cmp-name { margin: 0; color: var(--text); font-size: var(--text-sm, 13px); overflow-wrap: anywhere; }
+.cw-an-cmp-line { margin: 0; color: var(--faint); font-family: var(--mono, monospace); font-size: var(--text-xs, 11px); overflow-wrap: anywhere; }
+.cw-an-cmp-turn { margin: 0; color: var(--faint); font-size: var(--text-xs, 11px); }
+.cw-an-cmp-score { margin: 0; color: var(--text); font-size: var(--text-sm, 13px); }
+/* No score is a dash in the dim colour, never a zero in the ordinary one. */
+.cw-an-cmp-score.is-none { color: var(--faint); }
+.cw-an-cmp-verdict {
+  margin: 0;
+  padding: 8px 8px;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  color: var(--text);
+  font-size: var(--text-sm, 13px);
+  line-height: 1.55;
+}
+.cw-an-cmp-verdict.is-same { border-color: var(--cyan); }
+.cw-an-cmp-gap { margin: 0; color: var(--text); font-size: var(--text-sm, 13px); }
+
+/* The board and the panel share a row only while the screen is wide enough for both. */
+@container cw-screen (max-width: 940px) {
+  .cw-an-studio { flex-direction: column; align-items: stretch; }
+  .cw-an-panel { max-width: none; max-height: none; }
+  .cw-an-moves { max-height: 30vh; }
+}
+/* Two boards beside each other need the room for two. Below that they go one above the other, full width. */
+@container cw-screen (max-width: 700px) {
+  .cw-an-cmp-pair { grid-template-columns: 1fr; }
+}
+/*
+ * The bar stays upright at every width. Its filled part is a percentage of its height, set from the evaluation, so
+ * turning it on its side here would leave the fill measuring the wrong edge and the bar would read as level.
+ */
+@container cw-screen (max-width: 520px) {
+  .cw-an-bar { width: 12px; min-height: 120px; }
+  .cw-an-graph svg { height: 70px; }
+}
+
+/*
+ * ---- The analysis board on the shared layout
+ *
+ * The screen hands `ChessStage` the board, a strip above it, the nav and the graph below it, and the panel on the
+ * right. So the rules below are about those parts and no longer about arranging a board: how big the board is is
+ * measured by the stage, which is the whole reason it is no longer 357px wide.
+ */
+
+/* The panel is already a column the stage sized, so it must not also size itself. */
+.cw-an-stage .cw-an-panel { max-width: none; overflow: visible; }
+
+.cw-an-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2, 8px);
+  padding-bottom: var(--space-1, 4px);
+}
+
+.cw-an-player {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 3px 10px;
+  border: 1px solid var(--glass-border, rgba(160, 210, 255, 0.16));
+  border-radius: var(--radius-pill, 999px);
+  font-size: var(--text-sm, 12px);
+  color: var(--text, #ededef);
+}
+.cw-an-player small { color: var(--faint, #7f848f); font-size: var(--text-xs, 11px); }
+
+.cw-an-result {
+  font: 600 var(--text-sm, 12px) / 1 var(--mono, monospace);
+  color: var(--text, #ededef);
+}
+
+.cw-an-turnchip, .cw-an-scratchchip {
+  font-size: var(--text-sm, 12px);
+  color: var(--faint, #7f848f);
+}
+/* A scratch board is marked by a word as well as by its outline: the state is never the colour alone. */
+.cw-an-scratchchip {
+  padding: 2px 8px;
+  border: 1px dashed var(--glass-border, rgba(160, 210, 255, 0.16));
+  border-radius: var(--radius-pill, 999px);
+  color: var(--amber, #ffbe4d);
+}
+
+/* The score the bar beside the board is showing, in figures, with the depth under it. */
+.cw-an-scorechip {
+  margin-inline-start: auto;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 3px 10px;
+  border: 1px solid var(--cyan, #3fd8ff);
+  border-radius: var(--radius-md, 10px);
+  font: 600 var(--text-md, 13px) / 1 var(--mono, monospace);
+  color: var(--text, #ededef);
+}
+.cw-an-scorechip small { font: 400 var(--text-xs, 11px) / 1 var(--font, sans-serif); color: var(--faint, #7f848f); }
+/* Nothing calculated is a dash and a dim dashed outline, never a bar at the middle. */
+.cw-an-scorechip.is-unknown { border-style: dashed; border-color: var(--glass-border, rgba(160, 210, 255, 0.16)); color: var(--faint, #7f848f); }
+
+.cw-an-wide { width: auto; padding-inline: 10px; font-size: var(--text-xs, 11px); }
+
+/* Something true and worth knowing once, where a paragraph used to be. */
+.cw-an-hint {
+  font-size: var(--text-xs, 11px);
+  color: var(--faint, #7f848f);
+  border-bottom: 1px dotted var(--faint, #7f848f);
+  cursor: help;
+}
+
+/* A move of an engine line: a button that walks into it, not a word in a sentence. */
+.cw-an-line-move {
+  padding: 1px 5px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm, 6px);
+  background: transparent;
+  color: var(--text, #ededef);
+  font: inherit;
+  cursor: pointer;
+}
+.cw-an-line-move:hover:not(:disabled) { border-color: var(--cyan, #3fd8ff); background: color-mix(in srgb, var(--cyan, #3fd8ff) 12%, transparent); }
+.cw-an-line-move:focus-visible { outline: 2px solid var(--cyan, #3fd8ff); outline-offset: 1px; }
+.cw-an-line-move:disabled { cursor: default; }
+
+/* ---- The Position panel: the board in and out as text */
+
+.cw-an-pos { display: flex; flex-direction: column; gap: var(--space-3, 12px); }
+.cw-an-pos-out, .cw-an-pos-in { display: flex; flex-direction: column; gap: var(--space-2, 8px); }
+.cw-an-pos-label { font-size: var(--text-xs, 11px); color: var(--faint, #7f848f); }
+
+.cw-an-pos-fen, .cw-an-pos-paste {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border: 1px solid var(--input-border, var(--glass-border, rgba(160, 210, 255, 0.16)));
+  border-radius: var(--radius-control, 8px);
+  background: var(--input-bg, var(--bg-mid, #060708));
+  color: var(--text, #ededef);
+  font: 400 var(--text-sm, 12px) / 1.5 var(--mono, monospace);
+  resize: vertical;
+}
+.cw-an-pos-fen:focus-visible, .cw-an-pos-paste:focus-visible { outline: 2px solid var(--cyan, #3fd8ff); outline-offset: 1px; }
+
+.cw-an-pos-scratch {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2, 8px);
+  padding: var(--space-2, 8px);
+  border: 1px dashed var(--glass-border, rgba(160, 210, 255, 0.16));
+  border-radius: var(--radius-md, 10px);
+}
+.cw-an-pos-scratchline { margin: 0; font-size: var(--text-sm, 12px); color: var(--text, #ededef); }
