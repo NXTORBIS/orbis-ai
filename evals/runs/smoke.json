@@ -1,0 +1,101 @@
+{
+  "label": "smoke",
+  "model": "openai/gpt-oss-20b",
+  "effort": "high",
+  "promptVariant": null,
+  "systemPrompt": "You are Orbis. Today is Fri, Oct 16, 2026.\n\nHow to answer:\n- Lead with the answer or the result in the first sentence. Put reasoning, caveats and detail after it, never before.\n- Match length to the question. A simple question gets one or two sentences; a hard one gets the space it needs. Don't pad.\n- Use plain language. Define a term the first time a beginner would not know it. Prefer a concrete example to an abstract description.\n- Be honest about certainty. Say \"I'm not sure\" or \"this may be out of date\" when that is the case, and say what you would check. Never invent facts, quotes, numbers, links or sources.\n- If the request is ambiguous in a way that changes the answer, ask one short clarifying question; otherwise state the assumption you made and answer.\n- Do not open with filler (\"Great question\", \"Certainly\", \"Sure!\", \"As an AI\") and do not close with filler (\"I hope this helps\", \"Let me know if you need anything\").\n- Follow explicit format instructions exactly (word limits, bullet counts, language, tone) and keep following them in later turns until the user changes them.\n- Use Markdown only where it helps: short lists for steps or options, tables for comparisons, fenced code with a language tag for code, $...$ for math. Plain paragraphs otherwise.\n- For code: give working code first, then a brief note on what it does or what to watch for. Do not restate the question.",
+  "startedAt": "2026-10-16T07:07:50.421Z",
+  "results": [
+    {
+      "id": "chat-01",
+      "bucket": "everyday",
+      "question": "I've had a long day and I'm too tired to think about dinner. Any ideas?",
+      "expect": null,
+      "answer": "Try a one‑pot pasta with spinach and canned tomatoes: sauté onions, add pasta, canned tomatoes, water, a pinch of salt and red‑pepper flakes, then stir in spinach and simmer for 10 minutes. This takes under 20 minutes, uses pantry staples, and you can skip the garlic if you’re in a rush.",
+      "model": "openai/gpt-oss-20b",
+      "seconds": 1,
+      "usage": {
+        "prompt": 409,
+        "completion": 466,
+        "total": 875
+      },
+      "metrics": {
+        "wordCount": 51,
+        "leadsWithAnswer": true,
+        "fillerPhrases": 0,
+        "withinMaxWords": null,
+        "bulletCount": 0,
+        "bulletsOk": null,
+        "numericAnswerPresent": null,
+        "mustContainOk": null,
+        "mustContainMissing": [],
+        "unbalancedCodeFence": false,
+        "repeatedSentences": 0,
+        "repeatedWindowShare": 0,
+        "hedged": null
+      },
+      "error": null
+    },
+    {
+      "id": "chat-02",
+      "bucket": "everyday",
+      "question": "What's a good way to stop procrastinating on small chores?",
+      "expect": null,
+      "answer": "Try the 2‑minute rule: if a chore takes two minutes or less, do it right away; if it takes longer, start it with a short timer to build momentum. This reduces the mental hurdle of beginning, and the timer keeps you focused so the task is finished before you can drift away.",
+      "model": "openai/gpt-oss-20b",
+      "seconds": 1.4,
+      "usage": {
+        "prompt": 404,
+        "completion": 803,
+        "total": 1207
+      },
+      "metrics": {
+        "wordCount": 52,
+        "leadsWithAnswer": true,
+        "fillerPhrases": 0,
+        "withinMaxWords": null,
+        "bulletCount": 0,
+        "bulletsOk": null,
+        "numericAnswerPresent": null,
+        "mustContainOk": null,
+        "mustContainMissing": [],
+        "unbalancedCodeFence": false,
+        "repeatedSentences": 0,
+        "repeatedWindowShare": 0,
+        "hedged": null
+      },
+      "error": null
+    },
+    {
+      "id": "chat-03",
+      "bucket": "everyday",
+      "question": "hey, how's it going?",
+      "expect": null,
+      "answer": "I’m doing well, thanks! How about you?",
+      "model": "openai/gpt-oss-20b",
+      "seconds": 0.7,
+      "usage": {
+        "prompt": 399,
+        "completion": 223,
+        "total": 622
+      },
+      "metrics": {
+        "wordCount": 7,
+        "leadsWithAnswer": true,
+        "fillerPhrases": 0,
+        "withinMaxWords": null,
+        "bulletCount": 0,
+        "bulletsOk": null,
+        "numericAnswerPresent": null,
+        "mustContainOk": null,
+        "mustContainMissing": [],
+        "unbalancedCodeFence": false,
+        "repeatedSentences": 0,
+        "repeatedWindowShare": 0,
+        "hedged": null
+      },
+      "error": null
+    }
+  ],
+  "updatedAt": "2026-10-16T07:08:34.818Z"
+}
