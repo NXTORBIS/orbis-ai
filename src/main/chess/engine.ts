@@ -1,12 +1,25 @@
 import { randomUUID } from 'node:crypto'
 import { spawn, type ChildProcess } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { existsSync, statSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
 import { availableParallelism, totalmem } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { LineReader, goCommand, parseLine, safeOptionValue, type EngineOption, type InfoLine } from '../../shared/chess/uci.ts'
+import { SKILL_OPTION } from '../../shared/chess/opponents.ts'
 import { fromEngine, type Score, type Side } from '../../shared/chess/evaluation.ts'
 import { applyMove, checkFen, sideToMove, uciLineToSan } from '../../shared/chess/rules.ts'
+import {
+  CACHE_SCHEMA,
+  halfmoveOf,
+  keyFor,
+  reusedFrom,
+  type AnalysisAsk,
+  type AnalysisScope,
+  type CachedAnalysis,
+  type CachedLine,
+  type EngineIdentity,
+  type ReusedFrom
+} from '../../shared/chess/analysisCache.ts'
 import {
   KNOWN_TAG,
   LICENCE_ID,
@@ -116,8 +129,26 @@ export interface AnalysisRequest {
   requestId?: string
   /** A board waiting for a number comes before a game being swept through. */
   priority?: 'interactive' | 'batch'
+  /**
+   * The engine's own strength dial for this one search, 0 to 20. Absent means nothing held back.
+   *
+   * Per search rather than set once on the engine, because one engine process answers everybody: the game you are
+   * playing against a gentle opponent, the hint you asked for, the analysis board and a whole-game sweep. A dial
+   * left turned down would answer all of them, and nothing on screen would show it. So it is set immediately before
+   * the `go` that wants it and the engine is put back to its own default before any search that does not.
+   */
+  skill?: number
   /** True for the first position of a new game, so the engine clears what it learnt about the last one. */
   newGame?: boolean
+  /** Which game this is, so a variant's answers are never kept beside standard chess's. `standard` when absent. */
+  variant?: string
+  /**
+   * False to insist on a fresh search.
+   *
+   * For the one case where a stored answer is not what somebody is asking for: "search this again" means search it
+   * again. The answer is still kept afterwards, because a fresh search is exactly what the cache wants to hold.
+   */
+  useCache?: boolean
   signal?: AbortSignal
   /** Called for every update, including the final one. */
   onUpdate?: (update: AnalysisUpdate) => void
@@ -158,9 +189,27 @@ export interface AnalysisResult extends AnalysisBase {
   lines: AnalysisInfo[]
   /** Said plainly when the answer could not be used as the engine gave it. */
   note: string | null
+  /**
+   * Set when this answer was kept from an earlier search rather than found now, with what it was found under.
+   *
+   * Null on everything the engine really searched. A screen that shows a reused answer without showing this is a
+   * screen claiming a search happened that did not (Section 423).
+   */
+  from?: ReusedFrom | null
 }
 
 export type AnalysisUpdate = AnalysisInfo | AnalysisResult
+
+/**
+ * What the engine needs of the store that keeps its answers.
+ *
+ * An interface rather than the store itself, so this file stays plain Node with no database in it and the whole
+ * engine can still be tested against a cache that is a Map. `src/main/chess/analysisStore.ts` is the real one.
+ */
+export interface AnalysisCachePort {
+  look(ask: AnalysisAsk): { kind: 'hit'; entry: CachedAnalysis } | { kind: 'miss'; explain: string }
+  keep(entry: CachedAnalysis): { kind: 'stored' } | { kind: 'refused'; because: string }
+}
 
 // ---------------------------------------------------------------- resources
 
@@ -258,6 +307,11 @@ export interface ChessEngineOptions {
   arch?: string
   /** Accept a release that publishes no checksum. Off, deliberately: the thing being downloaded gets executed. */
   allowUnverified?: boolean
+  /**
+   * Where answers are kept between searches. Absent means every position is searched afresh, which is what Chess
+   * World did before this existed: correct, and slow.
+   */
+  cache?: AnalysisCachePort
   /** A line of diagnostics. Never the place anything is decided. */
   onLog?: (line: string) => void
 }
@@ -333,12 +387,22 @@ class EngineProcess {
   exitDetail: string | null = null
   private readonly errors: string[] = []
   private active: ActiveSearch | null = null
+  /** What the last search that was thrown away had reached. See `abandon` and `takeAbandoned`. */
+  private abandoned: { requestId: string; info: AnalysisInfo | null } | null = null
   /** A `bestmove` is still owed from a search that was abandoned. Until it arrives the engine is mid-sentence. */
   private owed = false
   private owedWaiters: Waiter[] = []
   private readyWaiters: Waiter[] = []
   private uciWaiter: Waiter | null = null
   private appliedMultiPv = 1
+  /**
+   * The strength dial as this process last set it, or null while it has never been touched.
+   *
+   * Null is not "20". It means Orbis has not sent the option at all, so the engine is on whatever it starts at --
+   * and the dial is then left alone, which keeps a build that never plays a weakened game exactly as it was before
+   * any of this existed.
+   */
+  private appliedSkill: number | null = null
   private seenNewGame = false
 
   constructor(child: ChildProcess, timeouts: Timeouts, log: (line: string) => void) {
@@ -535,7 +599,9 @@ class EngineProcess {
       bestmoveSan,
       ponder: ponderMove,
       lines,
-      note
+      note,
+      // Said rather than left out: this search really happened, just now. Only a kept answer carries a `from`.
+      from: null
     }
     search.emit(result)
     search.settle(result)
@@ -622,7 +688,47 @@ class EngineProcess {
     this.send(`setoption name ${name} value ${text}`)
     this.applied.set(name, text)
     if (name === 'MultiPV') this.appliedMultiPv = Number(text)
+    if (name === SKILL_OPTION) this.appliedSkill = Number(text)
     return text
+  }
+
+  /**
+   * The value the strength dial goes back to when a search does not want it turned down.
+   *
+   * The engine's own advertised default, because "nothing held back" is the engine's idea of that and not Orbis's.
+   * Its maximum if it published no default, and null if it published neither -- in which case the dial cannot be
+   * restored honestly and is reported rather than guessed at.
+   */
+  private fullStrengthDial(option: EngineOption): number | null {
+    const stated = Number(option.default)
+    if (Number.isFinite(stated)) return stated
+    if (typeof option.max === 'number' && Number.isFinite(option.max)) return option.max
+    return null
+  }
+
+  /**
+   * Puts the strength dial where this search wants it.
+   *
+   * Three cases, and the third is the one that matters. A search that asks for a weaker engine sets the dial. A
+   * search that does not, on an engine whose dial Orbis has already turned down, sets it back to the engine's own
+   * default -- otherwise a hint, an evaluation or a game review would quietly be answered by a weakened engine. And
+   * a search that does not, on an engine whose dial has never been touched, does nothing at all.
+   */
+  private async setStrength(wanted: number | null): Promise<void> {
+    const option = this.options.get(SKILL_OPTION)
+    if (!option) {
+      // Never sent to an engine that does not advertise it. A screen asks `handicapReach` to find this out and say so.
+      if (wanted !== null) this.log(`this engine offers no "${SKILL_OPTION}", so nothing was held back for this search`)
+      return
+    }
+    if (wanted === null && this.appliedSkill === null) return
+    const target = wanted ?? this.fullStrengthDial(option)
+    if (target === null) {
+      this.log(`this engine published neither a default nor a maximum for "${SKILL_OPTION}", so it cannot be put back to full strength`)
+      return
+    }
+    if (target === this.appliedSkill) return
+    if (this.setOption(SKILL_OPTION, target) !== null) await this.ready()
   }
 
   // ------------------------------------------------------------ searching
@@ -640,6 +746,8 @@ class EngineProcess {
     limits: AnalysisLimits
     multipv: number
     newGame: boolean
+    /** The strength dial for this search. Null means nothing held back, and puts a turned-down dial back. */
+    skill: number | null
     emit: (update: AnalysisUpdate) => void
   }): Promise<AnalysisResult> {
     // A `go` while the engine still owes a `bestmove` produces one stream of answers to two questions.
@@ -657,6 +765,9 @@ class EngineProcess {
       this.setOption('MultiPV', wanted)
       await this.ready()
     }
+    // Both option changes happen here, between the wait for the last search and this one's `go`, because UCI is one
+    // conversation: a `setoption` sent while a search is running belongs to neither search.
+    await this.setStrength(job.skill)
 
     return new Promise<AnalysisResult>((resolve, reject) => {
       const budget = job.limits.movetime
@@ -701,11 +812,34 @@ class EngineProcess {
     if (search.done) return
     search.done = true
     if (search.timer) clearTimeout(search.timer)
+    /*
+     * What it had reached is kept to one side before the search is thrown away.
+     *
+     * A search that was stopped halfway is not nothing: an engine told to stop at depth 14 has really looked
+     * fourteen moves ahead. The request still fails -- nobody is handed a partial answer as though it finished --
+     * but the numbers are available to whoever wants to keep them, marked as a search that did not finish. Without
+     * this they are lost inside this object, which is why Chess World searched a position from nothing every time
+     * somebody stepped through a game quickly.
+     */
+    this.abandoned = { requestId: search.requestId, info: search.lines.get(1) ?? search.last }
     if (this.active === search) {
       this.active = null
       this.owed = !this.gone
     }
     search.fail(error)
+  }
+
+  /**
+   * What the last abandoned search had reached, if it is the one being asked about.
+   *
+   * Taken, not read: it is handed over once and forgotten, so the same partial can never be attached to a second
+   * request. The request id has to match for the same reason every update here carries one.
+   */
+  takeAbandoned(requestId: string): AnalysisInfo | null {
+    const held = this.abandoned
+    if (!held || held.requestId !== requestId) return null
+    this.abandoned = null
+    return held.info
   }
 
   /**
@@ -772,6 +906,18 @@ interface Job {
   multipv: number
   priority: 'interactive' | 'batch'
   newGame: boolean
+  variant: string
+  /** The strength dial for this search, or null for nothing held back. */
+  skill: number | null
+  useCache: boolean
+  /**
+   * When the engine really began searching, by Orbis's own clock.
+   *
+   * Set again just before the `go`, not when the request was queued. Waiting in the queue and starting the engine
+   * are not thinking, and counting them would let a search that thought for no time at all be reused for somebody
+   * who asked for two seconds of it.
+   */
+  startedAt: number
   signal?: AbortSignal
   emit: (update: AnalysisUpdate) => void
   resolve: (result: AnalysisResult) => void
@@ -795,6 +941,97 @@ export function cleanLimits(raw: AnalysisLimits | undefined): AnalysisLimits {
   if (depth !== null) out.depth = Math.min(99, depth)
   if (nodes !== null) out.nodes = Math.min(1e12, nodes)
   return out
+}
+
+// ---------------------------------------------------------------- turning answers into stored answers and back
+
+/** Option values as the cache keys them: text, because that is what UCI sends and what the engine confirms. */
+function asStrings(options: Record<string, string | number | boolean>): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const [name, value] of Object.entries(options)) out[name] = String(value)
+  return out
+}
+
+/** One line of a search, as it is kept. The notation is not kept: it is worked out again from the position. */
+function toCachedLine(line: AnalysisInfo): CachedLine {
+  return {
+    multipv: line.multipv,
+    score: line.score,
+    depth: line.depth,
+    seldepth: line.seldepth,
+    nodes: line.nodes,
+    timeMs: line.timeMs,
+    bound: line.bound,
+    pvUci: line.pvUci
+  }
+}
+
+/**
+ * A stored answer, as the answer a caller is waiting for.
+ *
+ * Everything readable is built again here against the position: the notation of each line, and the best move checked
+ * for legality exactly as it was when the engine first offered it. A stored line that no longer plays in the
+ * position -- which would mean the position and the key had come apart -- is dropped as notation and kept as
+ * coordinates, the same refusal the live search makes, so the fault is visible instead of guessed at.
+ */
+export function resultFromEntry(entry: CachedAnalysis, requestId: string, fen: string): AnalysisResult {
+  const asInfo = (line: CachedLine): AnalysisInfo => {
+    const read = line.pvUci.length ? uciLineToSan(fen, [...line.pvUci]) : null
+    return {
+      requestId,
+      fen,
+      score: line.score,
+      depth: line.depth,
+      seldepth: line.seldepth,
+      nodes: line.nodes,
+      // How fast the machine was while it searched. A fact about that moment, not about this position, so it is
+      // not kept and is not invented from the stored nodes and seconds either.
+      nps: null,
+      timeMs: line.timeMs,
+      pvSan: read && read.legal ? read.san : null,
+      pvUci: [...line.pvUci],
+      multipv: line.multipv,
+      bound: line.bound,
+      complete: false
+    }
+  }
+  const lines = entry.lines.map(asInfo)
+  const topRead = entry.pvUci.length ? uciLineToSan(fen, [...entry.pvUci]) : null
+  let bestmove: string | null = null
+  let bestmoveSan: string | null = null
+  let note = entry.note
+  if (entry.bestmove) {
+    const played = applyMove(fen, entry.bestmove)
+    if (played) {
+      bestmove = played.uci
+      bestmoveSan = played.san
+    } else {
+      note = `The kept answer offered "${entry.bestmove}", which is not a legal move in this position, so it was not used.`
+    }
+  }
+  return {
+    requestId,
+    fen,
+    score: entry.score,
+    depth: entry.depth,
+    seldepth: entry.seldepth,
+    nodes: entry.nodes,
+    nps: null,
+    timeMs: entry.timeMs,
+    pvSan: topRead && topRead.legal ? topRead.san : null,
+    pvUci: [...entry.pvUci],
+    multipv: 1,
+    bound: entry.bound,
+    complete: true,
+    bestmove,
+    bestmoveSan,
+    // What the engine expected in reply is not kept: it belongs to the search, and a ponder move is only ever used
+    // while the engine is still running.
+    ponder: null,
+    lines,
+    note,
+    from: reusedFrom(entry)
+  }
 }
 
 export class ChessEngine {
@@ -1094,15 +1331,72 @@ export class ChessEngine {
         new ChessEngineError('duplicate-request', `An analysis called "${requestId}" is already running, so a second one would be impossible to tell apart.`, false)
       )
     }
+    const multipv = Math.max(1, Math.floor(Number(request.multipv) || 1))
+    const variant = (request.variant || 'standard').trim().toLowerCase()
+    /*
+     * A weakened search is never kept and never served from what was kept.
+     *
+     * Two answers to the same position from the same engine at two different strengths are two different answers,
+     * and the key an answer is stored under is built from the options the engine had applied -- which, around a
+     * search that changes one of them, is read at two different moments. Rather than make that right, a search that
+     * holds the engine back stays out of the store entirely: it is a move in a game you are playing, so nobody will
+     * ever ask for it again, and the cost of searching it afresh is the hundred milliseconds it was given anyway.
+     */
+    // `typeof`, not `Number(...)`: `Number(null)` is 0, which is the weakest setting the dial has. A request that
+    // said nothing about strength must mean nothing held back, never the gentlest engine there is.
+    const skill = typeof request.skill === 'number' && Number.isFinite(request.skill) ? Math.floor(request.skill) : null
+    const useCache = request.useCache !== false && skill === null
+    const search = (): Promise<AnalysisResult> => this.queued(request, { requestId, fen, limits, multipv, variant, skill, useCache })
+    /*
+     * The stored answer first, and only then the engine.
+     *
+     * The lookup is its own step rather than part of the queue because a kept answer must not wait behind a search:
+     * the whole point is that stepping back to a position you have already looked at costs nothing. If anything
+     * about the lookup does not fit -- a different engine, not deep enough, a search that was stopped -- it is a
+     * miss and the search runs exactly as it did before this existed.
+     */
+    if (!this.o.cache || !useCache) return search()
+    return this.served({ requestId, fen, limits, multipv, variant }, request).then((hit) => {
+      if (!hit) return search()
+      /*
+       * Cancelled while the stored answer was being looked for.
+       *
+       * Nothing is delivered and nothing is sent to the screen. Whatever asked has moved on -- the board is on the
+       * next position -- and handing it an answer for the one it left is the fault Section 429 is about, free answer
+       * or not. This is the only gate the answer passes through, which is why the update is sent from here rather
+       * than from inside the lookup.
+       */
+      if (request.signal?.aborted) throw new ChessEngineError('cancelled', 'Cancelled.', false)
+      // Sent as an update as well, so a screen following the search sees a kept answer arrive exactly where a fresh
+      // one would have, and shows `from` beside it rather than claiming a search just happened.
+      try {
+        request.onUpdate?.(hit)
+      } catch (e) {
+        this.log(`an update listener threw: ${e instanceof Error ? e.message : String(e)}`)
+      }
+      return hit
+    })
+  }
+
+  /** The request as it was really asked, once the sync checks have passed. */
+  private queued(
+    request: AnalysisRequest,
+    o: { requestId: string; fen: string; limits: AnalysisLimits; multipv: number; variant: string; skill: number | null; useCache: boolean }
+  ): Promise<AnalysisResult> {
+    const { requestId, fen, limits } = o
     return new Promise<AnalysisResult>((resolve, reject) => {
       let listener: (() => void) | null = null
       const job: Job = {
         requestId,
         fen,
         limits,
-        multipv: Math.max(1, Math.floor(Number(request.multipv) || 1)),
+        multipv: o.multipv,
         priority: request.priority === 'batch' ? 'batch' : 'interactive',
         newGame: request.newGame === true,
+        variant: o.variant,
+        skill: o.skill,
+        useCache: o.useCache,
+        startedAt: Date.now(),
         signal: request.signal,
         emit: (update) => {
           try {
@@ -1142,6 +1436,147 @@ export class ChessEngine {
     })
   }
 
+  // ------------------------------------------------------------ keeping and reusing answers
+
+  /**
+   * Which engine an answer would come from.
+   *
+   * Readable without starting the engine, deliberately: a kept answer must not cost a process start, which is most
+   * of what it was saving. The release tag comes from the install record and the build from the binary on disk --
+   * both facts Orbis established. The name is the engine's own claim about itself and is only there once one has
+   * shaken hands, so it is recorded as provenance and is never part of deciding whether an answer may be reused.
+   *
+   * Null when there is nothing to identify: no engine, no key, no cache. An evaluation that cannot say which engine
+   * produced it could never be judged usable, so it is better not stored at all.
+   */
+  engineIdentity(): EngineIdentity | null {
+    const version = this.record?.version ?? null
+    let build: string | null = null
+    if (this.binary) {
+      try {
+        const stat = statSync(this.binary.path)
+        // Where it is, how big it is and when it was written. Enough to notice a different engine put at the same
+        // path, which is exactly what somebody doing their own build does.
+        build = `${this.binary.path}:${stat.size}:${Math.round(stat.mtimeMs)}`
+      } catch {
+        build = this.binary.path
+      }
+    }
+    if (!version && !build) return null
+    return {
+      name: this.process && !this.process.gone ? this.process.name : null,
+      version,
+      build,
+      /*
+       * What the engine really accepted, once it is running. Before that, what Orbis was told to set on it -- which
+       * is the same thing for every option the engine advertises. The one case where the two differ is an option
+       * the engine refuses, and that costs one wasted search on the first analysis of a session rather than a wrong
+       * answer, because a mismatch here is always a miss.
+       */
+      applied: this.process ? Object.fromEntries(this.process.applied) : asStrings(this.o.options ?? {})
+    }
+  }
+
+  /** What a lookup is asking about. */
+  private askFor(o: { fen: string; limits: AnalysisLimits; multipv: number; variant: string; scope: AnalysisScope }): AnalysisAsk | null {
+    const engine = this.engineIdentity()
+    if (!engine) return null
+    return { fen: o.fen, limits: o.limits, lines: o.multipv, variant: o.variant, engine, scope: o.scope }
+  }
+
+  /**
+   * A stored answer, turned back into the answer the caller is waiting for, or null for a miss.
+   *
+   * The notation of every line is worked out again here, against the position, rather than stored: `rules.ts` is the
+   * one module that decides what a move is, and keeping a second copy of its answer in a database is how the two
+   * drift apart. `nps` is not kept at all -- it is how fast the machine was at the time, which says nothing about a
+   * position -- so it comes back as null rather than as a figure made up from the stored nodes and seconds.
+   */
+  private async served(
+    o: { requestId: string; fen: string; limits: AnalysisLimits; multipv: number; variant: string },
+    request: AnalysisRequest
+  ): Promise<AnalysisResult | null> {
+    const cache = this.o.cache
+    if (!cache) return null
+    try {
+      // Reads the install record if it has not been read. A file read, not a process start.
+      if (!this.installing && !this.binary && !this.record) await this.discover()
+      const ask = this.askFor({ ...o, scope: request.priority === 'batch' ? 'game-sweep' : 'position' })
+      if (!ask) return null
+      const look = cache.look(ask)
+      if (look.kind !== 'hit') {
+        if (look.explain) this.log(`no stored answer for this position: ${look.explain}`)
+        return null
+      }
+      // Built, not sent: `analyse` above is the one place that decides whether this answer is still wanted.
+      return resultFromEntry(look.entry, o.requestId, o.fen)
+    } catch (e) {
+      // A cache is never allowed to break an analysis. Whatever went wrong, the search runs.
+      this.log(`looking for a stored answer failed, so the position is being searched: ${e instanceof Error ? e.message : String(e)}`)
+      return null
+    }
+  }
+
+  /** Keeps what a search found, if there is somewhere to keep it. Never throws into the search's own path. */
+  private remember(job: Job, found: AnalysisBase, o: { status: CachedAnalysis['status']; stoppedBecause: string | null; bestmove: string | null; note: string | null; lines: readonly AnalysisInfo[] }): void {
+    const cache = this.o.cache
+    if (!cache || !job.useCache) return
+    try {
+      const ask = this.askFor({
+        fen: job.fen,
+        limits: job.limits,
+        multipv: job.multipv,
+        variant: job.variant,
+        scope: job.priority === 'batch' ? 'game-sweep' : 'position'
+      })
+      if (!ask) return
+      const key = keyFor(ask)
+      if (key.kind === 'no-key') return
+      const at = Date.now()
+      const entry: CachedAnalysis = {
+        schema: CACHE_SCHEMA,
+        bucket: key.key.bucket,
+        request: key.key.request,
+        fen: job.fen,
+        position: key.key.position,
+        halfmove: halfmoveOf(job.fen),
+        variant: key.key.variant,
+        engineName: ask.engine.name,
+        engineVersion: ask.engine.version,
+        engineBuild: ask.engine.build,
+        options: key.key.options,
+        asked: job.limits,
+        askedLines: job.multipv,
+        scope: ask.scope,
+        score: found.score,
+        depth: found.depth,
+        seldepth: found.seldepth,
+        nodes: found.nodes,
+        timeMs: found.timeMs,
+        // Orbis's own clock, which is the only figure that can honestly be weighed against a time limit: the
+        // engine's own is the time at the moment it printed the line, and is always a little short of the search.
+        elapsedMs: Math.max(0, at - job.startedAt),
+        bound: found.bound,
+        bestmove: o.bestmove,
+        pvUci: found.pvUci,
+        lines: o.lines.map(toCachedLine),
+        status: o.status,
+        stoppedBecause: o.stoppedBecause,
+        note: o.note,
+        trimmedBecause: null,
+        createdAt: at,
+        lastUsedAt: at,
+        uses: 0,
+        pinned: false,
+        bytes: 0
+      }
+      const kept = cache.keep(entry)
+      if (kept.kind === 'refused') this.log(`that answer was not kept: ${kept.because}`)
+    } catch (e) {
+      this.log(`keeping that answer failed: ${e instanceof Error ? e.message : String(e)}`)
+    }
+  }
+
   /** The next request to run: anything interactive before anything batched, and first in first out within each. */
   private take(): Job | null {
     const at = this.queue.findIndex((j) => j.priority === 'interactive')
@@ -1163,18 +1598,47 @@ export class ChessEngine {
             if (job.signal?.aborted) throw new ChessEngineError('cancelled', 'Cancelled.', false)
             const engine = await this.start()
             this.note('searching', 'Thinking about the position…')
+            // From here, not from when it was queued: see `Job.startedAt`.
+            job.startedAt = Date.now()
             const result = await engine.search({
               requestId: job.requestId,
               fen: job.fen,
               limits: job.limits,
               multipv: job.multipv,
               newGame: job.newGame,
+              skill: job.skill,
               emit: job.emit
             })
             if (this.phase === 'searching') this.note('ready', `${engine.name ?? 'The engine'} is ready.`)
+            // Kept before the caller is told, so a second ask for the same position in the same breath finds it.
+            this.remember(job, result, {
+              status: 'complete',
+              stoppedBecause: null,
+              bestmove: result.bestmove,
+              note: result.note,
+              lines: result.lines
+            })
             job.resolve(result)
           } catch (e) {
             const error = e instanceof Error ? e : new Error(String(e))
+            /*
+             * A search that was stopped is kept as a search that was stopped.
+             *
+             * It is marked `cancelled`, so nothing will ever serve it as an answer -- `servable` refuses it outright.
+             * It is kept anyway for two reasons: it is the first thing evicted when room is needed, so it costs
+             * almost nothing; and a cache that shows how many searches were interrupted is a cache that shows
+             * somebody clicking through a game faster than the engine can answer, which is worth knowing.
+             */
+            const partial = this.process?.takeAbandoned(job.requestId) ?? null
+            if (partial) {
+              this.remember(job, partial, {
+                status: error instanceof ChessEngineError && (error.code === 'cancelled' || error.code === 'timeout') ? 'cancelled' : 'failed',
+                stoppedBecause: error.message,
+                bestmove: null,
+                note: null,
+                lines: []
+              })
+            }
             if (error instanceof ChessEngineError && error.code !== 'cancelled') {
               this.lastError = error.message
               this.recoverable = error.recoverable

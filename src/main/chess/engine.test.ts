@@ -591,6 +591,94 @@ test('an engine with no MultiPV is never asked for it', async () => {
   assert.equal(result.multipv, 1)
 })
 
+// ---------------------------------------------------------------- holding the engine back, for one search only
+
+test('the strength dial is set for the search that asked for it, and put back for the next one', async () => {
+  const { engine, last } = harness()
+
+  // A search that does not ask for it never touches the dial at all, so a build that never plays a weakened game
+  // talks to the engine exactly as it did before any of this existed.
+  await engine.analyse({ fen: START_FEN, limits: { movetime: 10 }, requestId: 'a' })
+  assert.deepEqual(last().sent('setoption name Skill Level'), [])
+
+  // A search that asks for a gentler engine sets it, and sets it before the `go` it belongs to.
+  await engine.analyse({ fen: START_FEN, limits: { movetime: 10 }, requestId: 'b', skill: 4 })
+  assert.deepEqual(last().sent('setoption name Skill Level'), ['setoption name Skill Level value 4'])
+  const order = last().commands
+  assert.ok(
+    order.indexOf('setoption name Skill Level value 4') < order.lastIndexOf('go movetime 10'),
+    'the dial was set after the search it was meant for had already started'
+  )
+
+  /*
+   * And the next search that does not ask for it puts the engine back to the default it advertised.
+   *
+   * This is the one that matters. One engine process answers the game you are playing, the hint you asked for, the
+   * evaluation on the analysis board and a whole-game review. A dial left turned down after a gentle opponent's
+   * move would answer all of them, and nothing on any of those screens would show it.
+   */
+  await engine.analyse({ fen: START_FEN, limits: { movetime: 10 }, requestId: 'c' })
+  assert.deepEqual(last().sent('setoption name Skill Level'), [
+    'setoption name Skill Level value 4',
+    'setoption name Skill Level value 20'
+  ])
+  assert.equal((await engine.status()).applied['Skill Level'], '20')
+
+  // Asked for the same value twice in a row, it is not sent twice: the engine is already there.
+  await engine.analyse({ fen: START_FEN, limits: { movetime: 10 }, requestId: 'd', skill: 4 })
+  await engine.analyse({ fen: START_FEN, limits: { movetime: 10 }, requestId: 'e', skill: 4 })
+  assert.equal(last().sent('setoption name Skill Level').length, 3)
+  assert.deepEqual(last().sent('setoption name Skill Level').slice(-1), ['setoption name Skill Level value 4'])
+
+  /*
+   * A request that says nothing about strength holds nothing back, whatever shape the nothing arrived in.
+   *
+   * `Number(null)` is 0, which is the weakest setting the dial has, so a request carrying a null would quietly be
+   * the gentlest engine there is -- on an analysis board, with nothing on screen to show it.
+   */
+  await engine.analyse({ fen: START_FEN, limits: { movetime: 10 }, requestId: 'f', skill: null as unknown as number })
+  assert.deepEqual(last().sent('setoption name Skill Level').slice(-1), ['setoption name Skill Level value 20'])
+})
+
+test('an engine with no strength dial is never sent one, and one with a narrower dial is held to it', async () => {
+  const plain = harness({
+    handler: (f, command) => {
+      if (command === 'uci') {
+        f.line('id name Narrow 1.0')
+        f.line('option name Threads type spin default 1 min 1 max 8')
+        f.line('uciok')
+        return
+      }
+      prompt(f, command)
+    }
+  })
+  // Nothing is guessed at. The search still runs, at the thinking time it was given and nothing held back, and
+  // `handicapReach` in src/shared/chess/opponents.ts is what tells a screen to say so rather than claim a strength.
+  const result = await plain.engine.analyse({ fen: START_FEN, limits: { movetime: 10 }, skill: 2 })
+  assert.deepEqual(plain.last().sent('setoption name Skill Level'), [])
+  assert.equal(result.complete, true)
+  assert.equal(result.bestmove, 'e2e4')
+
+  const narrow = harness({
+    handler: (f, command) => {
+      if (command === 'uci') {
+        f.line('id name Halfway 1.0')
+        f.line('option name Skill Level type spin default 8 min 3 max 8')
+        f.line('uciok')
+        return
+      }
+      prompt(f, command)
+    }
+  })
+  await narrow.engine.analyse({ fen: START_FEN, limits: { movetime: 10 }, requestId: 'n1', skill: 0 })
+  await narrow.engine.analyse({ fen: START_FEN, limits: { movetime: 10 }, requestId: 'n2' })
+  // Held to the range the engine published for itself, both on the way down and on the way back.
+  assert.deepEqual(narrow.last().sent('setoption name Skill Level'), [
+    'setoption name Skill Level value 3',
+    'setoption name Skill Level value 8'
+  ])
+})
+
 // ---------------------------------------------------------------- cancellation
 
 /** A search that will not finish on its own; `stop` is the only way out. */
