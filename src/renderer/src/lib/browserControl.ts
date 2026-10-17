@@ -52,6 +52,25 @@ const nextTask = (): Promise<void> =>
     channel.port2.postMessage(null)
   })
 
+/**
+ * Answers one question from the main process that is not a capability of the window's own.
+ *
+ * The screens bridge (`lib/surfaces`) is what this is for: the capabilities that ask its six questions are registered
+ * in the main process like every other one, and what arrives here is the question rather than a capability the window
+ * had to announce. So it goes over `control:window-run` with everything else -- one door between the application and
+ * its window, with one sender check on it -- instead of a second set of channels that could disagree with this one
+ * about who is allowed through.
+ *
+ * Returns the function that stops answering.
+ */
+export function registerControlHandler(name: string, mutates: boolean, run: WindowCapability['run']): () => void {
+  listen()
+  handlers.set(name, { mutates, run })
+  return () => {
+    if (handlers.get(name)?.run === run) handlers.delete(name)
+  }
+}
+
 /** Registers a part of the window's capabilities while it is mounted; handlers always see its latest state. */
 export function useControlScope(scope: string, capabilities: WindowCapability[]): void {
   const latest = useRef(capabilities)

@@ -1,22 +1,25 @@
-import { Crown, Music2, CandlestickChart, ClipboardList, FilePlus2, FlaskConical, BookMarked, GraduationCap, LayoutGrid, LayoutTemplate, Mic, PenTool, CalendarClock, Wrench, Globe2, Orbit, Flag, Swords, Trophy, type LucideIcon } from 'lucide-react'
-import { CAPABILITIES, CATEGORIES, type AppFeature, type OrbisCapability } from '../../../shared/commandCenter'
+import { Crown, Dices, Gamepad2, Music2, CandlestickChart, ClipboardList, FilePlus2, FlaskConical, BookMarked, GraduationCap, LayoutGrid, LayoutTemplate, Mic, PenTool, CalendarClock, Wrench, Globe2, Orbit, Flag, Swords, Trophy, type LucideIcon } from 'lucide-react'
+import type { AppFeature } from '../../../shared/commandCenter'
+import { ALL_MENU_FEATURES, menuFeatures, menuGroups, type MenuFeature } from '../../../shared/featureMenu'
+import { everythingChoice, type VisibilityChoice } from '../../../shared/featureVisibility'
 
 /**
- * The window's screens, taken from the one list both halves of Orbis read.
+ * The window's screens, with their pictures on.
  *
  * `Sidebar.tsx` used to hold `FEATURES`: eleven entries with their own labels, icons, hints and order, sitting
  * beside a registry that already knew all eleven. The two drifted nine features apart -- six capabilities claimed
  * a screen the window had deleted, three screens the window really had were in no capability at all -- and neither
  * side could tell, because neither ever asked the other anything.
  *
- * So the launcher is derived now. A screen appears in it because a capability says the window can open it, and for
- * no other reason; adding one means adding a line to the registry, which is the line the browser's Command Centre
- * reads too.
+ * So the launcher is derived. A screen appears in it because a capability says the window can open it and because
+ * this person has it switched on, and for no other reason. Which screens exist and what they are called is
+ * `shared/commandCenter.ts`; which of them one person sees is `shared/featureVisibility.ts`; the two put together is
+ * `shared/featureMenu.ts`, which is plain code with a test beside it.
  *
  * The one thing that genuinely belongs on this side is the icon. The registry names icons from the browser's own
  * set (`orbis-ui/panel/rail/icons.js`), which the window does not have and should not grow a second copy of, so
- * the mapping from those names to lucide lives here. A missing one is a visible gap rather than a crash, and the
- * test beside this file fails on it.
+ * the mapping from those names to lucide lives here. A missing one is a visible gap rather than a crash, and
+ * `src/shared/featureLauncher.test.ts` fails on it.
  */
 
 const ICONS: Readonly<Record<AppFeature, LucideIcon>> = Object.freeze({
@@ -38,52 +41,71 @@ const ICONS: Readonly<Record<AppFeature, LucideIcon>> = Object.freeze({
   cosmos: Orbit,
   f1: Flag,
   football: Trophy,
-  arena: Swords
+  arena: Swords,
+  arcade: Gamepad2
 })
 
-export interface Feature {
-  id: AppFeature
-  label: string
-  hint: string
+/**
+ * The icon for each screen the first run offers as a choice.
+ *
+ * The launcher's own icons, plus Chance -- which is a core surface rather than one of the nineteen, so it has no
+ * capability, is in no `ICONS` entry, and would be drawn as an empty square in a picker that only knew that map.
+ * `src/shared/featureChoiceGroups.test.ts` fails when an optional screen is missing from here.
+ */
+export const CHOICE_ICONS: Readonly<Record<string, LucideIcon>> = Object.freeze({
+  ...ICONS,
+  chance: Dices
+})
+
+export interface Feature extends MenuFeature {
   icon: LucideIcon
-  /** The category it is filed under, so the launcher can group rather than list eleven things flat. */
-  category: string
-  categoryLabel: string
 }
 
-const featureOf = (capability: OrbisCapability): Feature | null => {
-  if (!capability.app) return null
-  const icon = ICONS[capability.app]
-  if (!icon) return null
-  const category = CATEGORIES.find((one) => one.id === capability.category)
-  return {
-    id: capability.app,
-    label: capability.name,
-    hint: capability.description,
-    icon,
-    category: capability.category,
-    categoryLabel: category?.label ?? 'Orbis'
-  }
+const withIcon = (one: MenuFeature): Feature | null => {
+  const icon = (ICONS as Partial<Record<AppFeature, LucideIcon>>)[one.id]
+  return icon ? { ...one, icon } : null
 }
 
-/** Every screen the window can open, in the registry's order. */
-export const FEATURE_LIST: readonly Feature[] = Object.freeze(CAPABILITIES.map(featureOf).filter((one): one is Feature => one !== null))
+const drawn = (list: readonly MenuFeature[]): readonly Feature[] => Object.freeze(list.map(withIcon).filter((one): one is Feature => one !== null))
+
+/** Every screen the window can open, in the registry's order, whatever anybody has chosen. */
+export const FEATURE_LIST: readonly Feature[] = drawn(ALL_MENU_FEATURES)
 
 /**
- * The same screens, gathered under their categories.
+ * The screens this person has showing.
  *
- * Eleven rows flat is a list somebody has to read all of; the same eleven under four headings is a list somebody
- * can skip most of. The order is the registry's own category order, so it matches the browser's panel.
+ * `choice` may be null while Orbis is still reading the file, or in a context that never loads it. Null answers the
+ * essentials and nothing else, which is `isVisible`'s own rule and the safe direction: a menu that is briefly short
+ * is a menu, and one that briefly offers a screen somebody switched off is "never claim a thing is on when it is
+ * off" broken on every start.
  */
-export const FEATURE_GROUPS: readonly { id: string; label: string; items: readonly Feature[] }[] = Object.freeze(
-  CATEGORIES.map((category) => ({
-    id: category.id,
-    label: category.label,
-    items: FEATURE_LIST.filter((one) => one.category === category.id)
-  }))
-    .filter((group) => group.items.length > 0)
-    // The Arena is the one place new sport lands, so it leads the list rather than trailing off the bottom of it.
-    .sort((x, y) => (x.id === 'arena' ? 0 : 1) - (y.id === 'arena' ? 0 : 1))
-)
+export const featureListFor = (choice: VisibilityChoice | null): readonly Feature[] => drawn(menuFeatures(choice))
+
+export interface FeatureGroup {
+  id: string
+  label: string
+  items: readonly Feature[]
+}
+
+/**
+ * The same screens gathered under their categories, with nothing empty left behind.
+ *
+ * Nineteen rows flat is a list somebody has to read all of; the same rows under their headings is a list somebody
+ * can skip most of. A category whose every screen is switched off is dropped, heading included -- a heading over
+ * nothing is the clutter this change exists to fix, in miniature.
+ *
+ * There is deliberately no unfiltered `FEATURE_GROUPS` any more. A menu built from one would show screens somebody
+ * switched off, and the only way to be sure nothing does that is for the full list not to be available as a menu.
+ * `ALL_FEATURES_GROUPED` below is for Settings, where the point is to list everything there is to choose.
+ */
+export const featureGroupsFor = (choice: VisibilityChoice | null): readonly FeatureGroup[] =>
+  Object.freeze(
+    menuGroups(choice)
+      .map((group) => ({ id: group.id, label: group.label, items: drawn(group.items) }))
+      .filter((group) => group.items.length > 0)
+  )
+
+/** Every screen there is, grouped: what a chooser lists. Not a menu -- see above. */
+export const ALL_FEATURES_GROUPED: readonly FeatureGroup[] = featureGroupsFor(everythingChoice())
 
 export const featureById = (id: string): Feature | undefined => FEATURE_LIST.find((one) => one.id === id)
