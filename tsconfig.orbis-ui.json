@@ -12,7 +12,8 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true
   },
-  "//": "The start page's widgets. They are bundled by scripts/build-extension.mjs, which does not check types, so they are checked here.",
-  "include": ["orbis-ui/newtab/widgets/**/*.ts"],
-  "exclude": ["orbis-ui/newtab/widgets/**/*.test.ts"]
+  "//": "The start page's widgets and Orbis Music's full-tab page. Both are bundled by scripts/build-extension.mjs, which does not check types, so they are checked here. This is the browser's type environment: the DOM is here and Node is not, which is also why nothing either of them imports out of src/shared may reach the file system.",
+  "include": ["orbis-ui/newtab/widgets/**/*.ts", "extension-src/music/**/*.ts"],
+  "exclude": ["orbis-ui/newtab/widgets/**/*.test.ts"],
+  "//chrome": "The extension APIs. @types/chrome is not a dependency, so the few this page uses are declared where they are used rather than pulled in wholesale."
 }
