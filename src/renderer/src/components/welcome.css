@@ -2019,7 +2019,9 @@
     transition: none;
   }
 }
+/* The panel takes focus when the choice step opens, so a screen reader starts on it. It is not a control, so it must not
+   draw a frame: the frame was round the whole question and looked like a box. The cards keep their own focus rings. */
+.welcome-panel.is-choosing:focus,
 .welcome-panel.is-choosing:focus-visible {
-  outline: 2px solid var(--cyan);
-  outline-offset: 6px;
+  outline: none;
 }
