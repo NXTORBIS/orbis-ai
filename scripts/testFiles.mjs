@@ -83,6 +83,7 @@ export const TEST_FILES = [
   'orbis-ui/newtab/widgets/renderers/time/sums.test.ts',
   'src/main/chromium/agent.test.ts',
   'src/main/chromium/launch.test.ts',
+  'src/main/chromium/signInNotAutomation.test.ts',
   'src/main/chromium/browserManager.test.ts',
   'src/main/chromium/orbisSearchPage.test.ts',
   'src/main/browserLibrary.test.ts',
@@ -95,6 +96,29 @@ export const TEST_FILES = [
   'src/shared/avatarPatterns.test.ts',
   'src/shared/avatars.test.ts',
   'src/shared/browserControl.test.ts',
+  // Reaching inside the window's own screens: the protocol and the path resolving first, then the whole chain from a
+  // capability in the main process down to a real screen's own getters.
+  'src/shared/surfaces.test.ts',
+  'src/main/browserControl/surfaces.test.ts',
+  'src/main/browserControl/moduleSurfaces.test.ts',
+  // The three screens that wear that protocol: the window shell and the conversation, Settings -> Appearance,
+  // and the Customize centre inside it -- driven through the real capabilities, the real register and their own
+  // getters and setters, including the draft that is shown before anything is kept.
+  'src/main/browserControl/surfaceAdapters.test.ts',
+  // Studying and playing, wearing that protocol: Orbis Student, Courses and the games, each driven down to a
+  // parameter -- the focus session, the lesson and its quiz, the catalogue and a game's own pause.
+  'src/main/browserControl/learnSurfaces.test.ts',
+  // Chess World, the largest module, driven down to a parameter: the rail, the engine panel inside Study, the move
+  // list, the position editor and all thirty settings fields -- each one read out of the module's own model.
+  'src/main/browserControl/chessSurfaces.test.ts',
+  // The laboratories: the Algorithm Visualizer driven by the sentence it was asked for -- open it, pick Bubble Sort,
+  // set the speed and the array, start it -- with its real generators behind it, and a simulation's declared
+  // parameters set through the runtime that checks their units and their ranges.
+  'src/main/browserControl/labSurfaces.test.ts',
+  // And from a sentence: what "a little more" is on a real range, which screens go into the request, and what a run
+  // really did -- then the whole way through, with a stubbed model and two real screens.
+  'src/shared/screenRequests.test.ts',
+  'src/main/screenAgent.test.ts',
   'src/main/automationCheckpoint.test.ts',
   'src/main/browserControl/effects.test.ts',
   'src/shared/effectPolicy.test.ts',
@@ -106,6 +130,46 @@ export const TEST_FILES = [
   'src/main/workflows/compile.test.ts',
   'src/main/gameLogic.test.ts',
   'src/main/offlineGames.test.ts',
+  // The arcade's rules, one file per game, each tested without a canvas. Three of them prove the thing a player
+  // cannot check for themselves: that a puzzle the game made can really be finished. Crate Pusher searches every one
+  // of its rooms from scratch, Lights Out clears every board it makes, and Pipeworks turns every board back.
+  'src/shared/games/stacker.test.ts',
+  'src/shared/games/sokoban.test.ts',
+  'src/shared/games/lightsOut.test.ts',
+  'src/shared/games/pipes.test.ts',
+  'src/shared/games/solitaire.test.ts',
+  // The arcade's depth: what playing earns, the day's challenge, the run of days, and what opens. In the order they
+  // build on each other -- the calendar and the record of runs first, because the two below are worked out from them,
+  // and nothing else in the arcade means anything if a day is the wrong day.
+  'src/shared/games/progression.test.ts',
+  'src/shared/games/daily.test.ts',
+  'src/shared/games/streaks.test.ts',
+  // The arcade's puzzle games, each one's rules kept apart from its screen so the rules can be tested. They run
+  // together because they are all the same promise in five shapes: a puzzle that is handed out is a puzzle that can
+  // be finished. The Sudoku counts its own answers before it takes a clue away; the picture puzzle counts the
+  // pictures its clues allow; the tubes keep the moves they were made from and replay them; the sliding tiles are
+  // shuffled by real slides, and the parity rule is checked against every board a three-across puzzle can reach.
+  // Gem Swap's two are the ones a player would blame themselves for: a board dealt with a match already on it, and
+  // a board with no swap left to make.
+  'src/shared/games/sudoku.test.ts',
+  'src/shared/games/nonogram.test.ts',
+  'src/shared/games/matchThree.test.ts',
+  'src/shared/games/waterSort.test.ts',
+  'src/shared/games/slidingTiles.test.ts',
+  // The arcade's five action games, whose rules are kept apart from their screens for the same reason: the thing worth
+  // proving cannot be seen by playing. Road Cross searches every tick of every crossing it generates and insists all
+  // five home bays can be reached before the clock runs out. Hold the Line plays twelve waves twice over -- once with
+  // a plain defence, which has to hold, and once with no towers, which must not -- because a tower defence's balance is
+  // not a number anybody can read off the page. Up and Up proves every ledge can be reached from the one below it, at
+  // the worst moment of a sliding one's travel. On the Beat checks that the chart it generated from its own tune is
+  // never ambiguous: no two notes in a lane close enough that one tap could honestly be meant for either. Angle Shot
+  // re-finds a hole-in-one for every hole of twelve rounds with the slow search, rather than trusting the quick one the
+  // generator used to accept them.
+  'src/shared/games/roadCross.test.ts',
+  'src/shared/games/towerDefence.test.ts',
+  'src/shared/games/platformClimb.test.ts',
+  'src/shared/games/rhythmTap.test.ts',
+  'src/shared/games/angleShot.test.ts',
   'src/main/notes.test.ts',
   'src/main/tasks.test.ts',
   'src/main/clipboardHistory.test.ts',
@@ -191,6 +255,13 @@ export const TEST_FILES = [
   'src/main/workflows/orion.test.ts',
   'src/shared/calculate.test.ts',
   'src/shared/chess/rules.test.ts',
+  // The board, in the three parts of it that are decisions rather than drawing: the arrows and coloured squares
+  // somebody draws on a position, what slides when the position changes, and what the bar beside the board is
+  // allowed to say. They sit here because all three are read straight after the rules and none of them may decide
+  // anything about chess.
+  'src/shared/chess/marks.test.ts',
+  'src/shared/chess/pieceSlide.test.ts',
+  'src/shared/chess/evalBar.test.ts',
   // Learning and training, in the order they are built on each other: the exercise contract and its validator
   // first, because everything below is worthless if a position can be wrong; then the attempt machine and the
   // judge, the review schedule, line entry, and the blindfold trainer. `curriculum.test.ts` is last of the group
@@ -200,6 +271,11 @@ export const TEST_FILES = [
   'src/shared/chess/spaced.test.ts',
   'src/shared/chess/calculation.test.ts',
   'src/shared/chess/blindfold.test.ts',
+  // Words into squares and moves, and a whole game with the board hidden. Both sit here because both ask
+  // `calculation.ts` to read a move -- `spoken.ts` so an ambiguous phrase becomes a question rather than a guess,
+  // and `blindGame.ts` so the one decision about whether a board may be drawn is testable on its own.
+  'src/shared/chess/spoken.test.ts',
+  'src/shared/chess/blindGame.test.ts',
   'src/shared/chess/lessons.test.ts',
   'src/shared/chess/curriculum.test.ts',
   // The local chess engine: getting it onto the machine, and the whole conversation with it driven against a
@@ -207,12 +283,102 @@ export const TEST_FILES = [
   // "installed" means.
   'src/main/chess/install.test.ts',
   'src/main/chess/engine.test.ts',
+  // Keeping the engine's answers, so a position looked at twice is not searched twice. Three files because there
+  // are three separate ways this goes wrong. The first is the decisions -- which two asks are the same question,
+  // and which stored answer may be served for which ask -- and almost every test in it is a refusal, because every
+  // way a cache goes wrong is a reuse that should not have happened. The second is the file on disk: eviction that
+  // never drops the position on the screen, a profile's answers being its own, and a damaged file moved aside
+  // rather than written over. The third is the one neither of the others would notice: a cache nothing consults.
+  // It drives the whole engine against a scripted process and counts the searches it was really asked to run.
+  'src/shared/chess/analysisCache.test.ts',
+  'src/main/chess/analysisStore.test.ts',
+  'src/main/chess/analysisCacheWiring.test.ts',
+  // Everything Chess World keeps apart from the games -- the preferences, the puzzle collection, the repertoire, the
+  // Academy record and the study plan -- driven against a real temporary folder. What it proves is what the store
+  // does when something has gone wrong: a file that makes no sense is moved aside, a file that cannot be read is not
+  // written to at all, a save queued before a profile switch lands in the profile that made it, and a field this
+  // version has never heard of survives a trip out and back.
+  'src/main/chess/data.test.ts',
+  // The sixth of those files, which is the one that holds what somebody has worked out about a game. It is tested
+  // against the real game store beside it, because the promise worth testing is that an analysis which cannot be
+  // read never costs the game it was about -- and that a record this version cannot read is put aside in the file
+  // rather than deleted by the next save.
+  'src/main/chess/studies.test.ts',
+  // The window's half of the same move: bringing the old window-storage copy into the profile once, and not sending
+  // one message per change. The storage and both channels are handed in, so the conditions that decide whether
+  // somebody's record is moved -- or handed to the wrong profile -- are checked without a browser.
+  'src/renderer/src/components/chess/keeping.test.ts',
   // Live broadcast ingestion, in the order the layers depend on each other: the pure model first, because the two
   // below are only worth anything if it holds; then the Lichess adapter against recorded responses and an injected
   // fetch; then the manager against a stand-in provider. None of the three touches the network.
   'src/shared/chess/live.test.ts',
   'src/main/chess/live/lichess.test.ts',
   'src/main/chess/live/manager.test.ts',
+  // What a screen may say about a live game, next to the model it reads.
+  'src/shared/chess/liveView.test.ts',
+  // Playing a game: the session that decides whose turn it is and when the engine is asked, and the clock, which is
+  // measured from a stamp rather than counted down. Then what the opponent is allowed to say about a move.
+  'src/shared/chess/arena.test.ts',
+  'src/shared/chess/clock.test.ts',
+  'src/shared/chess/commentary.test.ts',
+  // The named opponents you can pick from: that the list is in order and says what it is, that every one of them is
+  // a setting the engine will really take, and that the engine's own strength dial reaches the search request.
+  'src/shared/chess/opponents.test.ts',
+  // Studying a game, and the data behind openings. `openings.test.ts` replays all 3,865 dataset lines through the
+  // rules, so it is slow and worth every second: it is the only thing standing between a wrong line and a name.
+  'src/shared/chess/analysis.test.ts',
+  // Keeping that analysis: what goes on the disk, what comes back, and what is refused. It covers `compare.ts` as
+  // well, which is where two lines' end positions are set against each other, because that reads the opening
+  // dataset and belongs beside the tests that already load it.
+  'src/shared/chess/study.test.ts',
+  'src/shared/chess/openings.test.ts',
+  // Going over a finished game: the accuracy per side, the two awards, which moves were theory, and the moments the
+  // evaluation really moved. It sits here because it is the one place that reads the opening dataset and the
+  // evaluations together -- a move is only honestly called Book by looking it up.
+  'src/shared/chess/review.test.ts',
+  'src/shared/chess/repertoire.test.ts',
+  // Endgames: the search that settles a claim, then the authored positions, which are recomputed on every run
+  // rather than trusted.
+  'src/shared/chess/endgames.test.ts',
+  'src/shared/chess/endgamesData.test.ts',
+  // Puzzles: what one is, how hard it is, and making one out of a game you played.
+  'src/shared/chess/puzzles.test.ts',
+  'src/shared/chess/puzzleRating.test.ts',
+  'src/shared/chess/puzzleGen.test.ts',
+  // The run against the clock: the modes, the lives, and the climb that refuses to be built out of nothing.
+  'src/shared/chess/puzzleRun.test.ts',
+  // Your own games: finding one, finding a position in one, and what the record will and will not claim about you.
+  'src/shared/chess/library.test.ts',
+  'src/shared/chess/positionSearch.test.ts',
+  'src/shared/chess/coach.test.ts',
+  'src/shared/chess/evidence.test.ts',
+  'src/shared/chess/progress.test.ts',
+  'src/shared/chess/challenges.test.ts',
+  // The way through the Academy, and games that were really played -- every move of all fifteen replayed.
+  'src/shared/chess/academyPath.test.ts',
+  'src/shared/chess/famous.test.ts',
+  // Setting a position up by hand, what a training screen may show, whether a dataset is really here, and the
+  // display conventions. `trainingView.test.ts` decides whether a board may be on screen at all, so it sits with
+  // the editor rather than with the trainers it serves.
+  'src/shared/chess/variants.test.ts',
+  'src/shared/chess/trainingView.test.ts',
+  // The two trainers that sit on top of it: finding squares by name, and playing a position out until it is
+  // converted. Vision's test walks every combination of its settings and checks that where no board may be drawn,
+  // nothing coming back from it names a square or a piece.
+  'src/shared/chess/vision.test.ts',
+  'src/shared/chess/drills.test.ts',
+  'src/shared/chess/reference.test.ts',
+  'src/shared/chess/settings.test.ts',
+  // The board drawn in three dimensions. Pure geometry, colour and hit-testing: no WebGL context is created, which
+  // is the point -- the maths is checkable without a graphics card.
+  'src/renderer/src/components/chess/three/boardGeometry.test.ts',
+  'src/renderer/src/components/chess/three/camera.test.ts',
+  'src/renderer/src/components/chess/three/palette.test.ts',
+  'src/renderer/src/components/chess/three/pieces.test.ts',
+  'src/renderer/src/components/chess/three/scene.test.ts',
+  'src/renderer/src/components/chess/three/selection.test.ts',
+  'src/renderer/src/components/chess/three/interaction.test.ts',
+  'src/renderer/src/components/chess/three/support.test.ts',
   'src/shared/commandCenter.test.ts',
   'src/shared/commandCenterDestinations.test.ts',
   // The Ask Orion screen in the browser panel, run against a stand-in for the page. Beside the two above because it
@@ -425,6 +591,9 @@ export const TEST_FILES = [
   'src/shared/orbisUiSyntax.test.ts',
   'src/shared/cssCollisions.test.ts',
   'src/shared/screenWidth.test.ts',
+  // Whether a screen still follows the theme. The light theme came out black because much of the window never asks
+  // for a token at all, and this is what counts the places that paint their own colour instead.
+  'src/shared/themeCoverage.test.ts',
   'src/shared/stylesheetIndex.test.ts',
   'src/shared/uiPrimitives.test.ts',
   'src/shared/testSuite.test.ts',
@@ -599,4 +768,32 @@ export const TEST_FILES = [
   'src/main/browserControl/undo.test.ts',
   'src/shared/siteProfiles.test.ts',
   'src/shared/selectionPlacement.test.ts',
+  'src/shared/stylesheetImports.test.ts',
+  'src/shared/featureLauncher.test.ts',
+  'src/shared/featureVisibility.test.ts',
+  'src/shared/featureMenu.test.ts',
+  'src/main/browserControl/hiddenScreens.test.ts',
+  'src/shared/featureChoiceGroups.test.ts',
+  'src/main/features/store.test.ts',
+  'src/shared/featuresSettings.test.ts',
+  'src/shared/addressParts.test.ts',
+  'src/main/carryOn.test.ts',
+  'src/main/carryOnLoop.test.ts',
+  'src/shared/refusal.test.ts',
+  'src/main/refusalChain.test.ts',
+  'src/shared/games/sequence.test.ts',
+  'src/shared/games/connectFour.test.ts',
+  'src/shared/games/mazeChase.test.ts',
+  'src/shared/games/drift.test.ts',
+  'src/shared/games/paddleDuel.test.ts',
+  // Where the arcade's record lives, now that it is in the profile rather than in the window's own storage. These
+  // four run together because they are one promise in four places: a score is somebody's, and nothing may write
+  // over a record it could not read. `kept` is the stored shape and the ordering a library of thirty-two needs;
+  // `finish` is the one call that writes a best score and a run together, so the two can never disagree; `boards`
+  // is every figure a leaderboard shows, worked out rather than stored; and `arcadeStore` is the file itself,
+  // driven through a damaged one, an unreadable one and a profile switch mid-write.
+  'src/shared/games/kept.test.ts',
+  'src/shared/games/finish.test.ts',
+  'src/shared/games/boards.test.ts',
+  'src/main/games/arcadeStore.test.ts',
 ]

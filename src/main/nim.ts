@@ -1,7 +1,7 @@
 import type { ChatMessage, ModelInfo, ReasoningEffort, StreamEvent } from '../shared/types'
 import { CHAT_MODELS, modelInfo, modelLabel, providerOf } from '../shared/models.ts'
 import { PROVIDERS } from '../shared/providers.ts'
-import { AUTO_MODEL } from '../shared/modelRoute.ts'
+import { AUTO_MODEL, REFUSAL_MAX_CHARS, isFlatRefusal } from '../shared/modelRoute.ts'
 import { chooseContext, contextFrom } from '../shared/attachmentIndex.ts'
 import { SseParser, ThinkTagSplitter } from './sse.ts'
 
@@ -101,6 +101,21 @@ export async function streamChat(opts: ChatOptions): Promise<void> {
   let lastModel = opts.model
   /** Services whose every key has been refused or has run out: nothing else of theirs is worth trying. */
   const spent = new Set<string>()
+  /** What a model said when it declined, kept in case nothing in the chain ends up answering. */
+  let refusal: RefusedError | null = null
+  /*
+   * How a dead end is reported.
+   *
+   * If a model declined, that is the honest thing to lead with: a later service failing for its own reason -- a
+   * key it has not got, say -- is about a model nobody chose, while the refusal is about what was asked. It is
+   * said as what happened rather than left to read as Orbis apologising.
+   */
+  const fail = (err: unknown, which: string): void => opts.emit({
+    type: 'error',
+    message: refusal
+      ? `No model would answer that. The last one asked said: ${refusal.said}`
+      : describeError(err, which)
+  })
   let busy = 0
 
   for (let i = 0; i < chain.length; i++) {
@@ -113,15 +128,31 @@ export async function streamChat(opts: ChatOptions): Promise<void> {
       if (opts.signal.aborted) return opts.emit({ type: 'aborted' })
       lastError = err
       lastModel = model
+      /*
+       * A model that would not answer at all.
+       *
+       * This is a successful request -- the model simply declined -- so it used to sail straight through to the
+       * screen. Asked for a reference on the rules of chess, one model replied only "I'm sorry, but I can't
+       * provide that" while two others wrote thousands of words on the same request, so a flat refusal is the
+       * model failing, not the request being refusable. Nothing was shown, so another model can answer instead,
+       * and the refusal is only shown if every one of them declines.
+       */
+      if (err instanceof RefusedError) {
+        refusal = err
+        const next = chain.slice(i + 1).find((a) => !spent.has(providerOf(a.model)))
+        if (!next) return fail(err, model)
+        opts.emit({ type: 'status', message: `${modelLabel(model)} would not answer that. Asking ${modelLabel(next.model)}...` })
+        continue
+      }
       const refusedKey = err instanceof HttpError && (err.status === 401 || err.reason === 'key')
       if (!(err instanceof HttpError) || !(FALLBACK_STATUSES.has(err.status) || refusedKey)) {
-        return opts.emit({ type: 'error', message: describeError(err, model) })
+        return fail(err, model)
       }
       // Keys this service refused, or that it keeps answering "busy" to, are not worth asking again for other models.
       if (refusedKey) spent.add(providerOf(model))
       else if (err.status === 429 && ++busy >= 2) spent.add(providerOf(model))
       if (refusedKey && !chain.slice(i + 1).some((a) => !spent.has(providerOf(a.model)))) {
-        return opts.emit({ type: 'error', message: describeError(err, model) })
+        return fail(err, model)
       }
       const next = chain.slice(i + 1).find((a) => !spent.has(providerOf(a.model)))
       if (next) {
@@ -131,7 +162,8 @@ export async function streamChat(opts: ChatOptions): Promise<void> {
       }
     }
   }
-  return opts.emit({ type: 'error', message: describeError(lastError, lastModel) })
+  // Nothing answered.
+  return fail(lastError, lastModel)
 }
 
 /**
@@ -144,12 +176,143 @@ const RESCUE_MAX_TOKENS = 4096
 interface StreamResult {
   hasContent: boolean
   finishReason: string | null
+  /** Everything this leg put on screen, so the next leg can be asked to carry on from it. */
+  text: string
 }
 
-/** Streams a reply, then silently retries once at low effort if reasoning left no answer. */
+/**
+ * Something that sits between the model and the screen and may hold text back for a moment.
+ *
+ * Two things need that. A reply that is nothing but a refusal must never be shown at all, and the second leg of a
+ * long answer usually restates the sentence it is carrying on from, which has to be dropped before anybody sees
+ * it twice. Both have to decide on text they have not finished receiving, so both hold the opening back.
+ */
+interface Gate {
+  /** Returns what may be shown now; '' means it is still being held. */
+  push(content: string): string
+  /** The stream ended: returns whatever is still held, or throws if the whole reply was a refusal. */
+  finish(finished: boolean): string
+}
+
+/** How much of a later leg is held back while looking for what it repeated. */
+const OVERLAP_WINDOW = 600
+/** The shortest repeat worth believing. Below this, matching text is coincidence and dropping it eats real words. */
+const OVERLAP_FLOOR = 12
+
+/**
+ * Joins a later leg onto the answer so far, dropping whatever it restated.
+ *
+ * Models restate the last sentence however plainly they are asked not to, so the repeat is found rather than
+ * trusted not to happen: the longest end of what is written that is also the start of what arrived. Only the end
+ * is searched, so a sentence repeated early in a long answer cannot make the whole middle disappear.
+ */
+export function joinLegs(sofar: string, next: string): string {
+  if (!next) return sofar
+  if (!sofar) return next
+  const window = sofar.slice(-OVERLAP_WINDOW)
+  let drop = 0
+  for (let len = Math.min(window.length, next.length); len >= OVERLAP_FLOOR; len--) {
+    if (window.endsWith(next.slice(0, len))) { drop = len; break }
+  }
+  const rest = next.slice(drop)
+  if (!rest) return sofar
+  // Two words must not run together at the join, and a word split across legs must not be broken in two.
+  const wordish = /[A-Za-z0-9]/
+  const gap = wordish.test(sofar[sofar.length - 1]) && wordish.test(rest[0]) ? ' ' : ''
+  return sofar + gap + rest
+}
+
+/** Holds the start of a later leg back, drops what it repeated, then lets everything through. */
+class CarryOnFilter implements Gate {
+  private held = ''
+  private open = false
+  private readonly sofar: string
+  constructor(sofar: string) { this.sofar = sofar }
+
+  push(content: string): string {
+    if (this.open) return content
+    this.held += content
+    return this.held.length >= OVERLAP_WINDOW ? this.release() : ''
+  }
+
+  finish(): string {
+    return this.open ? '' : this.release()
+  }
+
+  private release(): string {
+    this.open = true
+    const held = this.held
+    this.held = ''
+    return joinLegs(this.sofar, held).slice(this.sofar.length)
+  }
+}
+
+/** A reply that was nothing but a refusal, so another model can be asked instead. */
+class RefusedError extends Error {
+  // Written out rather than a parameter property: the tests run under strip-only TypeScript, which rejects those.
+  readonly said: string
+  constructor(said: string) {
+    super('The model would not answer.')
+    this.said = said
+  }
+}
+
+/** Holds a short reply back until it is clear it is an answer and not a flat refusal. */
+class RefusalGuard implements Gate {
+  private held = ''
+  private open = false
+
+  push(content: string): string {
+    if (this.open) return content
+    this.held += content
+    if (this.held.length <= REFUSAL_MAX_CHARS) return ''
+    this.open = true
+    const held = this.held
+    this.held = ''
+    return held
+  }
+
+  finish(finished: boolean): string {
+    if (this.open) return ''
+    const held = this.held
+    this.held = ''
+    this.open = true
+    if (isFlatRefusal(held, finished)) throw new RefusedError(held.trim())
+    return held
+  }
+}
+
+/** The most legs one answer may run to, so a model that never finishes cannot loop for ever. */
+const MAX_LEGS = 12
+/** How much of the answer so far the next leg is shown, so it knows where to carry on from. */
+const TAIL_CHARS = 1400
+
+/** What the next key is asked, so it carries straight on instead of starting again or apologising. */
+function carryOnPrompt(tail: string): string {
+  return [
+    'Carry straight on from exactly where the text below stops, and finish the answer.',
+    '',
+    'Do not start again, do not summarise what is already written, do not repeat the last sentence, and do not',
+    'mention being cut off or continued -- what you write is joined onto it and read as one answer. If it',
+    'stops mid-sentence or mid-word, carry on mid-sentence.',
+    '',
+    '--- the answer so far ends here ---',
+    tail
+  ].join('\n')
+}
+
+/**
+ * Streams a reply, and keeps asking until the answer is really finished.
+ *
+ * A model stops with `finish_reason: "length"` when it runs out of room, and Orbis used to stop with it, so a long
+ * answer simply ended mid-sentence. Each further leg goes out on the next key and is asked to carry on from the
+ * tail of what is written; what it restates anyway is dropped before anybody sees it, so the person reads one
+ * unbroken answer rather than several.
+ */
 async function streamWithKeys(model: string, opts: ChatOptions, variant: Variant = 'normal'): Promise<void> {
   const info = modelInfo(model)
-  let result = await withKeyRotation(model, opts, (key) => streamOnce(model, opts, key, variant))
+  // The first leg is watched for a flat refusal, which must never reach the screen.
+  let result = await withKeyRotation(model, opts, (key) => streamOnce(model, opts, key, variant, undefined, undefined, new RefusalGuard()))
   if (!result.hasContent && info.reasoningEffort && !opts.signal.aborted) {
     console.warn(`[chat] ${model} finished with no answer (finish_reason=${result.finishReason}); retrying at low reasoning effort`)
     try {
@@ -159,6 +322,31 @@ async function streamWithKeys(model: string, opts: ChatOptions, variant: Variant
       if (!(err instanceof HttpError) || opts.signal.aborted) throw err
     }
   }
+
+  let whole = result.text
+  for (let leg = 1; result.finishReason === 'length' && leg <= MAX_LEGS && !opts.signal.aborted; leg++) {
+    const carryOn: ChatOptions = {
+      ...opts,
+      messages: [
+        ...opts.messages,
+        { id: `carry-${leg}-so-far`, role: 'assistant', content: whole, createdAt: 0 },
+        { id: `carry-${leg}-ask`, role: 'user', content: carryOnPrompt(whole.slice(-TAIL_CHARS)), createdAt: 0 }
+      ]
+    }
+    const filter = new CarryOnFilter(whole)
+    try {
+      // `skipPreferred` starts on the next key: the one that just ran out of room is the one with least left.
+      result = await withKeyRotation(model, carryOn, (key) => streamOnce(model, carryOn, key, 'carry-on', undefined, undefined, filter), true)
+    } catch (err) {
+      // What is already written stands. Ending it here is better than losing it.
+      if (opts.signal.aborted) throw err
+      console.warn(`[chat] ${model} could not carry on after leg ${leg}: ${err instanceof Error ? err.message : String(err)}`)
+      break
+    }
+    if (!result.text) break
+    whole = joinLegs(whole, result.text)
+  }
+
   opts.emit({ type: 'done', model, truncated: result.finishReason === 'length' })
 }
 
@@ -210,7 +398,7 @@ function groqEffort(effort: ReasoningEffort): string {
 /**
  * 'lean' drops optional params after a 400; 'rescue' is the low-effort retry for an empty answer.
  */
-type Variant = 'normal' | 'lean' | 'rescue'
+type Variant = 'normal' | 'lean' | 'rescue' | 'carry-on'
 
 /**
  * `maxTokens` overrides the default output budget; null omits it and leaves Groq's default.
@@ -222,7 +410,8 @@ async function streamOnce(
   apiKey: string,
   variant: Variant = 'normal',
   maxTokens?: number | null,
-  charBudget?: number
+  charBudget?: number,
+  gate?: Gate
 ): Promise<StreamResult> {
   const info = modelInfo(model)
   const recentMessages = fitToContext(opts.messages.slice(-15), opts.systemPrompt, charBudget ?? inputCharBudget(info))
@@ -276,7 +465,7 @@ async function streamOnce(
     // A reply budget above the model's per-minute output limit fails on every key; ask for less and try again.
     if (res.status === 429 && /output tokens per minute|\bOTPM\b/i.test(errorMsg) && variant !== 'lean') {
       const limits = parseLimits(errorMsg)
-      if (limits && limits.requested > limits.limit) return streamOnce(model, opts, apiKey, variant, limits.limit, charBudget)
+      if (limits && limits.requested > limits.limit) return streamOnce(model, opts, apiKey, variant, limits.limit, charBudget, gate)
     }
 
     // Some answers say only "reduce the length of the messages or completion": a size error with no unit in it.
@@ -290,7 +479,7 @@ async function streamOnce(
       // Groq counts the output budget against the per-minute token limit; shrink it to fit.
       const inputOnly = /\bITPM\b|input tokens/i.test(errorMsg)
       if (!inputOnly && typeof body.max_completion_tokens === 'number') {
-        return streamOnce(model, opts, apiKey, variant, fitBudget(errorMsg, body.max_completion_tokens), charBudget)
+        return streamOnce(model, opts, apiKey, variant, fitBudget(errorMsg, body.max_completion_tokens), charBudget, gate)
       }
       // More history than this model's per-minute limit allows: send proportionally less and try again.
       const limits = parseLimits(errorMsg)
@@ -298,7 +487,7 @@ async function streamOnce(
         const sent = opts.systemPrompt.length + recentMessages.reduce((n, m) => n + messageSize(m), 0)
         const smaller = sent * (limits.limit / limits.requested) * 0.85
         if (fitToContext(opts.messages.slice(-15), opts.systemPrompt, smaller).length < recentMessages.length) {
-          return streamOnce(model, opts, apiKey, variant, maxTokens, smaller)
+          return streamOnce(model, opts, apiKey, variant, maxTokens, smaller, gate)
         }
       }
       // Even the newest message alone is too much; a model with more room can take it.
@@ -311,28 +500,31 @@ async function streamOnce(
     }
 
     // A model may reject optional params; retry once with a minimal request.
-    if (res.status === 400 && variant === 'normal') return streamOnce(model, opts, apiKey, 'lean', undefined, charBudget)
+    if (res.status === 400 && variant === 'normal') return streamOnce(model, opts, apiKey, 'lean', undefined, charBudget, gate)
     throw new HttpError(res.status, errorMsg, retryAfterMs)
   }
   if (!res.body) throw new HttpError(502, 'The AI service sent an empty response.')
 
-  // The rescue continues the reply that already started.
-  if (variant !== 'rescue') opts.emit({ type: 'start', model })
-  return readStream(res.body, opts)
+  // The rescue and the later legs continue the reply that already started, so they must not start a new one.
+  if (variant !== 'rescue' && variant !== 'carry-on') opts.emit({ type: 'start', model })
+  return readStream(res.body, opts, gate)
 }
 
 /** Relays an OpenAI-style SSE body as delta events. `holdReasoning` keeps reasoning back until the answer starts. */
-async function readStream(stream: ReadableStream<Uint8Array>, opts: ChatOptions): Promise<StreamResult> {
+async function readStream(stream: ReadableStream<Uint8Array>, opts: ChatOptions, gate?: Gate): Promise<StreamResult> {
   const parser = new SseParser()
   const splitter = new ThinkTagSplitter()
   const decoder = new TextDecoder()
   const reader = stream.getReader()
   let finishReason: string | null = null
   let hasContent = false
+  let text = ''
 
   const relay = (content: string, reasoning: string): void => {
     if (content.trim()) hasContent = true
-    if (content || reasoning) opts.emit({ type: 'delta', content: content || undefined, reasoning: reasoning || undefined })
+    const shown = gate && content ? gate.push(content) : content
+    text += shown
+    if (shown || reasoning) opts.emit({ type: 'delta', content: shown || undefined, reasoning: reasoning || undefined })
   }
 
   const handle = (data: string): void => {
@@ -375,8 +567,16 @@ async function readStream(stream: ReadableStream<Uint8Array>, opts: ChatOptions)
 
   const tail = splitter.flush()
   if (tail.content.trim()) hasContent = true
-  if (tail.content || tail.reasoning) opts.emit({ type: 'delta', content: tail.content || undefined, reasoning: tail.reasoning || undefined })
-  return { hasContent, finishReason }
+  relay(tail.content, tail.reasoning)
+  if (gate) {
+    // Anything still held goes out now -- unless the whole reply was a refusal, in which case this throws.
+    const last = gate.finish(finishReason !== 'length')
+    if (last) {
+      text += last
+      opts.emit({ type: 'delta', content: last })
+    }
+  }
+  return { hasContent, finishReason, text }
 }
 
 interface StreamChunk {

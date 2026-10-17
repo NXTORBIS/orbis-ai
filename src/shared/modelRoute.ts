@@ -158,3 +158,36 @@ export function resolveModel(requested: string, input: RouteInput, models: reado
 
 /** How much a model can write in one reply, or null when nobody has measured it. Never guessed at. */
 export const outputRoomOf = (id: string): number | null => modelInfo(id).maxOutputTokens ?? null
+
+/**
+ * A reply that is nothing but a refusal.
+ *
+ * Asked for a long reference on the rules of chess, one model answered in full: "I'm sorry, but I can't provide
+ * that." Two others wrote thousands of words on the same request, so that was the model failing, not the request
+ * being refusable. Auto treats it as a failure and asks the next model.
+ *
+ * Getting this wrong is only expensive in one direction, so it is deliberately narrow: the reply must be short,
+ * must have finished, and must OPEN with one of these phrasings. An answer that merely mentions being unable to
+ * do something, or that refuses one part way down, is left exactly as the model wrote it.
+ */
+export const REFUSAL_MAX_CHARS = 600
+
+const REFUSAL_OPENERS: readonly RegExp[] = [
+  /^i(?:'m| am) sorry,? but i (?:can't|cannot|am unable|'m unable|am not able)/,
+  /^i (?:can't|cannot) (?:provide|help|assist|do|comply|generate|write|create|answer|continue|fulfil|fulfill)/,
+  /^i(?:'m| am) (?:unable|not able) to/,
+  /^sorry,? i (?:can't|cannot)/,
+  /^unfortunately,? i (?:can't|cannot)/,
+  /^as an ai(?: language model)?,? i (?:can't|cannot)/,
+  /^i must decline/,
+  /^i won't (?:provide|help|assist|do|write|generate)/
+]
+
+/** True when the whole of a finished reply is one of the refusals above. */
+export function isFlatRefusal(text: string, finished: boolean): boolean {
+  if (!finished) return false
+  const said = text.trim()
+  if (said.length === 0 || said.length > REFUSAL_MAX_CHARS) return false
+  const plain = said.toLowerCase().replace(/[‘’ʼ]/g, "'")
+  return REFUSAL_OPENERS.some((one) => one.test(plain))
+}
