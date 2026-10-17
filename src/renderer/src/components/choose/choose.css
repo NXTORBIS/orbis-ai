@@ -20,14 +20,13 @@
    */
   container-type: inline-size;
   container-name: decision;
-  margin-top: 10px;
-  padding: 14px;
-  border: 1px solid var(--glass-border);
-  border-radius: 14px;
+  margin-top: 8px;
+  padding: 12px;
+  border-radius: 10px;
   background: color-mix(in srgb, var(--bg-mid) 70%, transparent);
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   max-width: 100%;
 }
 
@@ -36,7 +35,7 @@
 .dc-head {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
+  gap: 8px;
 }
 
 .dc-mark {
@@ -45,9 +44,9 @@
   height: 26px;
   flex: 0 0 auto;
   place-items: center;
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--cyan) 16%, transparent);
-  color: var(--cyan);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--faint);
 }
 
 .dc-title {
@@ -59,7 +58,7 @@
 }
 
 .dc-title strong {
-  font-size: 14.5px;
+  font-size: 15px;
   font-weight: 650;
   line-height: 1.25;
 }
@@ -67,7 +66,7 @@
 .dc-title > span {
   overflow: hidden;
   color: var(--faint);
-  font-size: 11.5px;
+  font-size: 11px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -84,7 +83,7 @@
   border: 1px solid var(--glass-border);
   border-radius: 999px;
   color: var(--faint);
-  font-size: 10.5px;
+  font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.01em;
   white-space: nowrap;
@@ -98,8 +97,8 @@
  * differently it would quietly only apply to that one state.
  */
 .dc-hold-steady {
-  border-color: color-mix(in srgb, var(--cyan) 40%, var(--glass-border));
-  color: var(--cyan);
+  border-color: var(--glass-border);
+  color: var(--text);
 }
 
 .dc-hold-somewhat-sensitive {
@@ -108,8 +107,8 @@
 
 .dc-hold-very-sensitive,
 .dc-hold-no-clear-winner {
-  border-color: color-mix(in srgb, var(--warn, #e9b44c) 40%, var(--glass-border));
-  color: var(--warn, #e9b44c);
+  border-color: color-mix(in srgb, var(--amber) 40%, var(--glass-border));
+  color: var(--amber);
 }
 
 /* ---------------------------------------------------------------- what was said */
@@ -124,7 +123,7 @@
 .dc-line {
   margin: 0;
   color: var(--text);
-  font-size: 12.5px;
+  font-size: 13px;
   line-height: 1.5;
 }
 
@@ -138,16 +137,16 @@
 .dc-warn {
   display: flex;
   margin: 0;
-  padding: 8px 10px;
+  padding: 8px 8px;
   align-items: flex-start;
-  gap: 7px;
-  border-radius: 9px;
-  font-size: 12px;
+  gap: 8px;
+  border-radius: 10px;
+  font-size: 13px;
   line-height: 1.45;
 }
 
 .dc-whatif {
-  border: 1px dashed color-mix(in srgb, var(--cyan) 35%, var(--glass-border));
+  border: 1px dashed var(--glass-border);
   color: var(--faint);
 }
 
@@ -168,19 +167,19 @@
 }
 
 .dc-ask {
-  border: 1px solid color-mix(in srgb, var(--cyan) 30%, var(--glass-border));
+  border: 1px solid var(--glass-border);
   color: var(--text);
 }
 
 .dc-warn {
-  background: color-mix(in srgb, var(--warn, #e9b44c) 12%, transparent);
+  background: color-mix(in srgb, var(--amber) 12%, transparent);
   color: var(--text);
 }
 
 .dc-warn > svg {
   flex: 0 0 auto;
   margin-top: 1px;
-  color: var(--warn, #e9b44c);
+  color: var(--amber);
 }
 
 /* What a follow-up changed. */
@@ -197,20 +196,20 @@
 .dc-applied li {
   display: flex;
   align-items: flex-start;
-  gap: 6px;
+  gap: 4px;
   color: var(--faint);
-  font-size: 11.5px;
+  font-size: 11px;
   line-height: 1.4;
 }
 
 .dc-applied li > svg {
   flex: 0 0 auto;
   margin-top: 2px;
-  color: var(--cyan);
+  color: var(--faint);
 }
 
 .dc-refused li > svg {
-  color: var(--warn, #e9b44c);
+  color: var(--amber);
 }
 
 /* ---------------------------------------------------------------- the ranking */
@@ -220,24 +219,24 @@
   margin: 2px 0 0;
   padding: 0;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
   list-style: none;
   counter-reset: none;
 }
 
 .dc-row {
   display: grid;
-  padding: 7px 8px;
+  padding: 8px 8px;
   align-items: center;
-  gap: 9px;
+  gap: 8px;
   grid-template-columns: 20px minmax(0, 1fr) 90px 44px;
   border: 1px solid transparent;
-  border-radius: 9px;
+  border-radius: 10px;
 }
 
 .dc-row.dc-leads {
-  border-color: color-mix(in srgb, var(--cyan) 38%, var(--glass-border));
-  background: color-mix(in srgb, var(--cyan) 8%, transparent);
+  border-color: var(--glass-border);
+  background: var(--panel);
 }
 
 /*
@@ -259,17 +258,17 @@
   display: grid;
   place-items: center;
   color: var(--faint);
-  font-size: 11.5px;
+  font-size: 11px;
   font-variant-numeric: tabular-nums;
   font-weight: 600;
 }
 
 .dc-row.dc-leads .dc-place {
-  color: var(--cyan);
+  color: var(--text);
 }
 
 .dc-row.dc-out .dc-place {
-  color: var(--warn, #e9b44c);
+  color: var(--amber);
 }
 
 .dc-name {
@@ -281,7 +280,7 @@
 
 .dc-name strong {
   overflow: hidden;
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -294,24 +293,24 @@
 }
 
 .dc-tag {
-  padding: 1px 5px;
+  padding: 1px 4px;
   border: 1px solid var(--glass-border);
-  border-radius: 4px;
+  border-radius: 6px;
   color: var(--faint);
-  font-size: 9.5px;
+  font-size: 10px;
   font-style: normal;
   letter-spacing: 0.01em;
   white-space: nowrap;
 }
 
 .dc-tag-warn {
-  border-color: color-mix(in srgb, var(--warn, #e9b44c) 40%, var(--glass-border));
-  color: var(--warn, #e9b44c);
+  border-color: color-mix(in srgb, var(--amber) 40%, var(--glass-border));
+  color: var(--amber);
 }
 
 .dc-breaks {
-  color: var(--warn, #e9b44c);
-  font-size: 10.5px;
+  color: var(--amber);
+  font-size: 10px;
   line-height: 1.35;
 }
 
@@ -371,27 +370,27 @@
 .dc-buttons {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 4px;
 }
 
 .dc-btn {
   display: inline-flex;
-  padding: 5px 10px;
+  padding: 4px 8px;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   border: 1px solid var(--glass-border);
-  border-radius: 8px;
+  border-radius: 6px;
   background: transparent;
   color: var(--faint);
   cursor: pointer;
   font: inherit;
-  font-size: 11.5px;
+  font-size: 11px;
   transition: color 0.14s ease, border-color 0.14s ease, background 0.14s ease;
 }
 
 .dc-btn:hover {
-  border-color: color-mix(in srgb, var(--cyan) 45%, var(--glass-border));
-  background: color-mix(in srgb, var(--cyan) 8%, transparent);
+  border-color: var(--glass-border);
+  background: var(--hover);
   color: var(--text);
 }
 
@@ -404,9 +403,9 @@
 
 .dc-tune {
   display: flex;
-  padding: 10px;
+  padding: 8px;
   flex-direction: column;
-  gap: 7px;
+  gap: 8px;
   border: 1px solid var(--glass-border);
   border-radius: 10px;
 }
@@ -420,7 +419,7 @@
 
 .dc-tune-name {
   overflow: hidden;
-  font-size: 12px;
+  font-size: 13px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -459,8 +458,8 @@
 }
 
 .dc-step:hover {
-  border-color: color-mix(in srgb, var(--cyan) 45%, var(--glass-border));
-  color: var(--cyan);
+  border-color: var(--line-strong);
+  color: var(--text);
 }
 
 .dc-step:focus-visible {
@@ -471,16 +470,16 @@
 .dc-tune-note {
   margin: 0;
   color: var(--faint);
-  font-size: 10.5px;
+  font-size: 10px;
 }
 
 /* ---------------------------------------------------------------- the working */
 
 .dc-detail {
   display: flex;
-  padding-top: 10px;
+  padding-top: 8px;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   border-top: 1px solid var(--glass-border);
 }
 
@@ -495,19 +494,19 @@
   flex-direction: column;
   gap: 1px;
   overflow-x: auto;
-  font-size: 11.5px;
+  font-size: 11px;
 }
 
 .dc-tr {
   display: grid;
   min-width: max-content;
-  padding: 5px 4px;
+  padding: 4px 4px;
   align-items: start;
-  gap: 10px;
+  gap: 8px;
   grid-auto-columns: minmax(64px, auto);
   grid-auto-flow: column;
   grid-template-columns: minmax(96px, 1.4fr);
-  border-radius: 5px;
+  border-radius: 6px;
 }
 
 .dc-tr:nth-child(even of .dc-tr) {
@@ -516,7 +515,7 @@
 
 .dc-th {
   color: var(--faint);
-  font-size: 10.5px;
+  font-size: 10px;
   font-weight: 600;
 }
 
@@ -528,7 +527,7 @@
 
 .dc-th i {
   color: var(--faint);
-  font-size: 9.5px;
+  font-size: 10px;
   font-style: normal;
   opacity: 0.75;
 }
@@ -552,13 +551,13 @@
 /* A guess, marked on the figure itself rather than in a footnote nobody reads. */
 .dc-cell b {
   margin-left: 2px;
-  color: var(--warn, #e9b44c);
+  color: var(--amber);
   font-weight: 700;
 }
 
 .dc-nothing em {
   color: var(--faint);
-  font-size: 10.5px;
+  font-size: 10px;
   font-style: normal;
   opacity: 0.8;
 }
@@ -566,7 +565,7 @@
 .dc-how {
   margin: 0;
   color: var(--faint);
-  font-size: 11.5px;
+  font-size: 11px;
   line-height: 1.45;
 }
 
@@ -577,13 +576,13 @@
   flex-direction: column;
   gap: 3px;
   color: var(--faint);
-  font-size: 11.5px;
+  font-size: 11px;
   line-height: 1.4;
 }
 
 .dc-block h4 {
   margin: 0 0 4px;
-  font-size: 11.5px;
+  font-size: 11px;
   font-weight: 600;
 }
 
@@ -593,7 +592,7 @@
   padding-left: 16px;
   flex-direction: column;
   gap: 4px;
-  font-size: 11.5px;
+  font-size: 11px;
   line-height: 1.45;
 }
 
@@ -604,21 +603,21 @@
 
 /* Whether knowing a missing thing would change the answer -- measured, not guessed, so it is stated plainly. */
 .dc-worth {
-  margin-left: 6px;
-  padding: 1px 5px;
-  border-radius: 4px;
-  font-size: 9.5px;
+  margin-left: 4px;
+  padding: 1px 4px;
+  border-radius: 6px;
+  font-size: 10px;
   white-space: nowrap;
 }
 
 .dc-worth.dc-would-decide-it {
-  background: color-mix(in srgb, var(--warn, #e9b44c) 18%, transparent);
-  color: var(--warn, #e9b44c);
+  background: color-mix(in srgb, var(--amber) 18%, transparent);
+  color: var(--amber);
 }
 
 .dc-worth.dc-could-change-it {
-  background: color-mix(in srgb, var(--cyan) 14%, transparent);
-  color: var(--cyan);
+  background: var(--panel);
+  color: var(--text);
 }
 
 .dc-worth.dc-would-not-change-it,
@@ -630,7 +629,7 @@
 /* Narrow -- the card, not the window: the four-column row becomes two, so nothing is squeezed to nothing. */
 @container decision (max-width: 420px) {
   .dc-row {
-    gap: 7px;
+    gap: 8px;
     grid-template-columns: 18px minmax(0, 1fr) 40px;
   }
 
