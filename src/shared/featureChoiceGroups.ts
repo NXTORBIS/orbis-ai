@@ -36,7 +36,7 @@ const PLAN: readonly { id: string; label: string; blurb: string; ids: readonly S
     id: 'make',
     label: 'Make things',
     blurb: 'Turn an answer into something you can keep, send or draw on.',
-    ids: Object.freeze(['create', 'pages', 'whiteboard', 'neurova'] as SurfaceId[])
+    ids: Object.freeze(['create', 'whiteboard', 'neurova'] as SurfaceId[])
   }),
   Object.freeze({
     id: 'learn',

@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
-import { CAPABILITIES, type AppFeature } from './commandCenter.ts'
+import { CAPABILITIES, WITHHELD_CAPABILITY_IDS, type AppFeature } from './commandCenter.ts'
 import { FEATURE_FACTS, STARTING_IDS, everythingChoice, factsFor } from './featureVisibility.ts'
 import { menuFeatures } from './featureMenu.ts'
 
@@ -117,7 +117,8 @@ test('the box you type in offers no slash command for a screen you switched off'
 test('with everything switched on, the menu is every screen the launcher can draw', () => {
   const everything = menuFeatures(everythingChoice()).map((one) => one.id as string)
   assert.deepEqual(
-    appFeatures().filter((id) => !everything.includes(id)),
+    // Withheld screens are not offered, so they are not expected in the menu either.
+    appFeatures().filter((id) => !everything.includes(id) && !WITHHELD_CAPABILITY_IDS.includes(id)),
     [],
     'a screen the registry says the window can open is missing from the menu even with everything switched on, so there is no way to choose it',
   )

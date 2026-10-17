@@ -383,7 +383,11 @@ export const CAPABILITIES: OrbisCapability[] = [
 
 export const capabilityById = (id: string): OrbisCapability | undefined => CAPABILITIES.find((c) => c.id === id)
 
-export const capabilitiesIn = (category: CommandCategory): OrbisCapability[] => CAPABILITIES.filter((c) => c.category === category)
+/** Capabilities not offered in this version. Kept in CAPABILITIES so the rest of the registry still agrees with itself. */
+export const WITHHELD_CAPABILITY_IDS: readonly string[] = Object.freeze(['pages'])
+const OFFERED = (c: OrbisCapability): boolean => !WITHHELD_CAPABILITY_IDS.includes(c.id)
+
+export const capabilitiesIn = (category: CommandCategory): OrbisCapability[] => CAPABILITIES.filter((c) => c.category === category && OFFERED(c))
 
 /** What is true of Orbis right now. Everything unknown is taken as absent: an unproven capability is not offered. */
 export interface Readiness {
@@ -533,7 +537,7 @@ export interface SearchHit {
  * is closed should be told the browser is closed, not that Orbis has no ad blocking.
  */
 export function searchCapabilities(query: string, ready: Readiness, limit = 8): SearchHit[] {
-  return CAPABILITIES.map((capability) => ({ capability, score: scoreCapability(capability, query), unavailable: unavailableBecause(capability, ready) }))
+  return CAPABILITIES.filter(OFFERED).map((capability) => ({ capability, score: scoreCapability(capability, query), unavailable: unavailableBecause(capability, ready) }))
     .filter((hit) => hit.score > 0)
     .sort((a, b) => b.score - a.score || a.capability.name.localeCompare(b.capability.name))
     .slice(0, limit)

@@ -144,7 +144,7 @@ describe('what somebody starts with', () => {
     assert.ok(visible.length > ESSENTIAL_IDS.length, 'a new profile opens onto an empty menu, which reads as broken')
     assert.ok(visible.length < FEATURE_FACTS.length, 'a new profile gets everything, which is the clutter this exists to fix')
     // The written-down starting set, so changing it is a deliberate edit rather than a drift.
-    assert.deepEqual([...choice.shown], ['chance', 'create', 'pages', 'toolkit'])
+    assert.deepEqual([...choice.shown], ['chance', 'create', 'toolkit'])
     assert.deepEqual([...visible], [...STARTING_IDS])
   })
 
@@ -160,7 +160,8 @@ describe('what somebody starts with', () => {
     // a choice is not a choice. `settled` is what the installation's own setup flag says.
     const read = readVisibility(null, { settled: true })
     assert.deepEqual(read.notes, [], 'an existing user was told something went wrong, and nothing did')
-    for (const one of FEATURE_FACTS) assert.equal(isVisible(one.id, read.value), true, `${one.id} vanished for somebody who already uses it`)
+    // Orbis Pages is withheld, so it is the one screen that is not shown whatever was saved.
+    for (const one of FEATURE_FACTS) if (one.id !== 'pages') assert.equal(isVisible(one.id, read.value), true, `${one.id} vanished for somebody who already uses it`)
     assert.equal(read.value.chosen, false, 'an existing user must not be recorded as having chosen a set they never saw')
   })
 
@@ -172,7 +173,8 @@ describe('what somebody starts with', () => {
 
   test('everythingChoice really is everything optional', () => {
     assert.deepEqual([...everythingChoice().shown], [...OPTIONAL_IDS])
-    assert.deepEqual([...hiddenSurfaces(everythingChoice())], [])
+    // Everything optional is on except the one screen that is withheld, which is always hidden.
+    assert.deepEqual([...hiddenSurfaces(everythingChoice())], ['pages'])
   })
 })
 
@@ -384,9 +386,9 @@ describe('turning things on and off', () => {
 
   test('the window’s twenty screens are what visibleFeatures answers about', () => {
     const all = visibleFeatures(everythingChoice())
-    assert.equal(all.length, 20, `visibleFeatures answered about ${all.length} screens rather than 20`)
+    assert.equal(all.length, 19, `visibleFeatures answered about ${all.length} screens rather than 19 (Orbis Pages is withheld)`)
     assert.equal(all.includes('chance' as AppFeature), false, 'Chance is not one of the window’s twenty feature screens')
     const short = visibleFeatures(newChoice())
-    assert.deepEqual([...short].sort(), ['clipboard', 'create', 'notes', 'pages', 'schedules', 'toolkit', 'workspaces'])
+    assert.deepEqual([...short].sort(), ['clipboard', 'create', 'notes', 'schedules', 'toolkit', 'workspaces'])
   })
 })

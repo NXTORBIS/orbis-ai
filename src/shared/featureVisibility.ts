@@ -276,7 +276,7 @@ export const FEATURE_FACTS: readonly FeatureFacts[] = Object.freeze([
     needs: [],
     needsAnyOf: [],
     // On for a new profile: it is the general-purpose "I need a tool for this" surface, not a subject.
-    startsOn: true,
+    startsOn: false,
     alsoHides: []
   }),
   facts({
@@ -442,7 +442,13 @@ export const factsFor = (id: string): FeatureFacts | undefined => BY_ID.get(id)
 export const ESSENTIAL_IDS: readonly SurfaceId[] = Object.freeze(FEATURE_FACTS.filter((one) => one.standing === 'essential').map((one) => one.id))
 
 /** Everything somebody chooses. These are the switches the interface draws. */
-export const OPTIONAL_IDS: readonly SurfaceId[] = Object.freeze(FEATURE_FACTS.filter((one) => one.standing === 'optional').map((one) => one.id))
+/**
+ * Screens that are not offered in this version of Orbis. Their code is kept, so putting one back is a one-line change
+ * here; until then no choice, saved or new, can show them.
+ */
+export const WITHHELD_IDS: readonly string[] = Object.freeze(['pages'])
+
+export const OPTIONAL_IDS: readonly SurfaceId[] = Object.freeze(FEATURE_FACTS.filter((one) => one.standing === 'optional' && !WITHHELD_IDS.includes(one.id)).map((one) => one.id))
 
 export const isEssential = (id: string): boolean => BY_ID.get(id)?.standing === 'essential'
 
@@ -795,6 +801,9 @@ export function isVisible(id: string, choice: VisibilityChoice | null): boolean 
 
 /** The whole answer for one surface. `isVisible` is this with everything but the one field thrown away. */
 export function featureState(id: string, choice: VisibilityChoice | null): FeatureState {
+  if (WITHHELD_IDS.includes(id)) {
+    return { id, available: false, visible: false, essential: false, chosen: false, hiddenBecause: 'Orbis Pages is not offered in this version.', blockedBy: Object.freeze([]) }
+  }
   const known = BY_ID.get(id)
   if (!known) {
     return {

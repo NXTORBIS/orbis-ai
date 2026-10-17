@@ -172,7 +172,9 @@ var CAPABILITIES = [
   { id: "account", name: "Account", lane: "set", category: "settings", description: "Who Orbis knows you as", icon: "account", keywords: ["account", "profile", "profiles", "name", "identity", "who", "person"], target: { kind: "panel", view: "account" }, pinnable: true, needs: ["helper"] }
 ];
 var capabilityById = (id) => CAPABILITIES.find((c) => c.id === id);
-var capabilitiesIn = (category) => CAPABILITIES.filter((c) => c.category === category);
+var WITHHELD_CAPABILITY_IDS = Object.freeze(["pages"]);
+var OFFERED = (c) => !WITHHELD_CAPABILITY_IDS.includes(c.id);
+var capabilitiesIn = (category) => CAPABILITIES.filter((c) => c.category === category && OFFERED(c));
 function destinationMissing(capability) {
   const target = capability.target;
   if (target.kind === "app") return "Only in the Orbis window";
@@ -223,7 +225,7 @@ function scoreCapability(capability, query) {
   return 0;
 }
 function searchCapabilities(query, ready, limit = 8) {
-  return CAPABILITIES.map((capability) => ({ capability, score: scoreCapability(capability, query), unavailable: unavailableBecause(capability, ready) })).filter((hit) => hit.score > 0).sort((a, b) => b.score - a.score || a.capability.name.localeCompare(b.capability.name)).slice(0, limit);
+  return CAPABILITIES.filter(OFFERED).map((capability) => ({ capability, score: scoreCapability(capability, query), unavailable: unavailableBecause(capability, ready) })).filter((hit) => hit.score > 0).sort((a, b) => b.score - a.score || a.capability.name.localeCompare(b.capability.name)).slice(0, limit);
 }
 function addressFor(capability) {
   if (capability.target.kind === "panel" || capability.target.kind === "view") return `chrome://orbis/#${capability.target.view}`;
@@ -269,6 +271,7 @@ export {
   MAX_PINS,
   PANEL_VIEWS,
   RAIL_VIEWS,
+  WITHHELD_CAPABILITY_IDS,
   addPin,
   addressFor,
   canPin,
