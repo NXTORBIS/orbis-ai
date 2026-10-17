@@ -95,6 +95,9 @@ const P = {
   download: '<path d="M12 3v12m0 0-4-4m4 4 4-4"/><path d="M4 19h16"/>',
   globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 0 1 0 18 15 15 0 0 1 0-18z"/>',
   game: '<rect x="2" y="7" width="20" height="11" rx="4"/><path d="M7 11v3M5.5 12.5h3M15.5 12h.01M18 14h.01"/>',
+  // A joystick, for the Arcade. The gamepad above is Football's, and two capabilities wearing one icon means
+  // neither is identified by it -- which commandCenter.test.ts fails on.
+  arcade: '<circle cx="12" cy="7" r="3"/><path d="M12 10v6"/><path d="M6 20a6 6 0 0 1 12 0z"/>',
   quote: '<path d="M9 7H6a2 2 0 0 0-2 2v2a2 2 0 0 0 2 2h1v1a3 3 0 0 1-3 3"/><path d="M19 7h-3a2 2 0 0 0-2 2v2a2 2 0 0 0 2 2h1v1a3 3 0 0 1-3 3"/>',
   spark: '<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M18 17l.9 2.1L21 20l-2.1.9L18 23l-.9-2.1L15 20l2.1-.9z"/>',
   // The four the selection palette names. Without them every one of those actions would have worn a plain circle.
