@@ -59,7 +59,7 @@ async function run(legs: Leg[], keys = ['key-one', 'key-two', 'key-three']): Pro
       if (event.type === 'delta' && event.content) shown += event.content
       if (event.type === 'done') done = event
     },
-    fetchFn: (async (url: string, init: { headers: Record<string, string>; body: string }) => {
+    fetchFn: (async (_url: string, init: { headers: Record<string, string>; body: string }) => {
       asked.push({ key: String(init.headers.Authorization).replace('Bearer ', ''), body: JSON.parse(init.body) })
       const here = legs[Math.min(leg, legs.length - 1)]
       leg += 1

@@ -86,6 +86,7 @@ import { WorkflowTitler } from './workflows/titler'
 import { parseWebSuggestions } from '../shared/omnibox'
 import { fetchFavicon } from './favicon'
 import { setupBrowserControl } from './browserControl/setup'
+import { registerScreenAgentIpc } from './screenAgentIpc'
 import { BrowserManager } from './chromium/browserManager'
 import { EmbedController, parseRegion } from './chromium/embedController'
 import { findBrowserWindow, foregroundPid, hideWindow, standaloneWindow, visibleBrowserWindows, type Standalone } from './chromium/embed'
@@ -358,10 +359,17 @@ import { NeurovaStore } from './neurova/store'
 import { registerNeurovaIpc } from './neurova/ipc'
 import { probeMachine } from './neurova/machine'
 import { ChessStore } from './chess/store'
+import { ChessDataStore } from './chess/data'
+import { AnalysisCacheStore } from './chess/analysisStore'
 import { ChessEngine } from './chess/engine'
 import { createLiveChessManager } from './chess/live/manager'
 import { createLichessBroadcasts, lichessProviderPort } from './chess/live/lichess'
 import { registerChessIpc } from './chess/ipc'
+import { ArcadeStore } from './games/arcadeStore'
+import { registerArcadeIpc } from './games/ipc'
+import { registerFeatureVisibilityIpc } from './features/ipc'
+import { featureState } from '../shared/featureVisibility'
+import { FeatureVisibilityStore } from './features/store'
 import { NeurovaEngine } from './neurova/engine'
 import { registerNeurovaIpc2 } from './neurova/ipc2'
 import { WorkspaceStore } from './neurova/workspace'
@@ -2795,6 +2803,28 @@ if (!app.requestSingleInstanceLock()) {
     browserControl = setupBrowserControl({
       getWindow: () => liveWindow(),
       store,
+      /*
+       * Why a screen is not in somebody's menu, so the control layer can tell switched off from missing.
+       *
+       * People choose which of Orbis's screens they see, and a screen that is switched off is not mounted -- so it
+       * is in no tree and "open Markets" cannot find it, which reads exactly like a screen that does not exist.
+       * They are different answers, and only one of them is true: everything in Markets is still there, and one
+       * switch brings it back. The sentence comes from the same shared code the menu and the box of everything use,
+       * so Orion cannot say something different from what the window shows.
+       *
+       * Only the first level of the path is asked about: the deeper levels are panels and tabs inside a screen,
+       * which are nothing to do with this choice. The store is read at the moment of the question rather than
+       * captured, because somebody may switch a feature at any time.
+       */
+      featureHidden: async (path: string) => {
+        const first = String(path).split('/')[0]?.trim() ?? ''
+        if (first === '') return null
+        const held = await featureVisibility.read()
+        const state = featureState(first, held.choice)
+        // Not available is not this function's business: a name Orbis has never had is "no such screen", which is
+        // what the caller already says.
+        return state.available && !state.visible ? state.hiddenBecause : null
+      },
       onSettingsChanged: (settings) => {
         nativeTheme.themeSource = settings.theme
         if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('settings:changed', settings)
@@ -2823,6 +2853,25 @@ if (!app.requestSingleInstanceLock()) {
       }
     })
     quitFlush.add('what Orion did in the browser', () => browserControl?.control.flush())
+
+    /*
+     * "Do this on my screens", from a sentence.
+     *
+     * The half above can read a control inside a panel four levels down, set it and say whether it worked. It takes a
+     * path and a value. This is what turns "turn the search depth up a little" into that path and that value: it
+     * resolves which of the open screens the request is about, asks Orion for steps over that subtree alone, checks
+     * every step against the real screens before anything runs, and carries them out as an ordinary plan.
+     *
+     * It gains nothing by being here. Every step goes through `control.execute` as `orion`, so the area switches, the
+     * effect policy, the approvals, the tab lock and the log all apply; and Orion is never asked to produce a number
+     * for "a little", because that comes from the control's own range (see `shared/screenRequests.ts`).
+     */
+    registerScreenAgentIpc({
+      getWindow: () => liveWindow(),
+      control: () => browserControl?.control ?? null,
+      confirm: (request) => browserControl!.windowControl.confirm(request),
+      ask: (system, user, options) => requestJson(system, user, GROQ_API_KEYS, (url, init) => net.fetch(url, init), options?.timeoutMs ?? 30_000, { maxTokens: options?.maxTokens ?? 1200 })
+    })
 
     // Profiles: separate browsing identities. Each has its own cookies, logins, site storage, history, bookmarks,
     // downloads and open pages; extensions are installed once and follow whichever profile is in use.
@@ -4324,14 +4373,47 @@ ${page.text}`, { howMany: 6 })
     const neurovaStore = new NeurovaStore(app.getPath('userData'))
     const chessStore = new ChessStore(app.getPath('userData'), 'default')
     /*
+     * Everything else Chess World remembers: the preferences, the puzzle collection and its history, the repertoire,
+     * the Academy record and the study plan. Five files beside the games, each in the profile rather than in the
+     * window's own storage, so they follow the profile and travel with a profile export.
+     */
+    const chessData = new ChessDataStore(app.getPath('userData'), 'default')
+    /*
+     * Which features this profile has chosen to see.
+     *
+     * Not in `settings.json`, and `src/main/features/store.ts` says why at length: that file is shared between every
+     * profile by design, and a work life and a personal one have every reason to want different menus. So it is a
+     * per-profile file like the twelve others, and it follows the profile and travels with a profile export.
+     *
+     * `settled` is the installation's own setup flag, and it decides the one question this store cannot answer for
+     * itself: what "there is no file" means. For somebody who has been using Orbis for months it means the menu they
+     * already had, in full -- the absence of a choice is not a choice, and nobody is dropped into onboarding or finds
+     * thirteen screens missing. For a first run it means the short starting set. Nothing is written in either case.
+     */
+    const featureVisibility = new FeatureVisibilityStore(app.getPath('userData'), 'default', {
+      settled: async () => (await store.getSettings()).welcomeCompleted
+    })
+    /*
      * The chess engine.
      *
      * Stockfish is a separate free program under the GPL, so Orbis does not carry a copy of it. This object knows
      * where one would live and can fetch it when the person asks; until then it honestly reports that there is no
      * engine, and the screen says so rather than offering an opponent that cannot play.
      */
+    /*
+     * The engine's answers, kept so a position looked at twice is not searched twice.
+     *
+     * A SQLite database rather than a JSON file, and `analysisStore.ts` says why at length: this is written every
+     * time a search finishes and grows to tens of thousands of variations, which is the one shape the JSON store is
+     * wrong for. It is also the only store in Chess World holding nothing anybody wrote, so losing it costs time and
+     * nothing else -- which is what makes it safe to empty and start again after an upgrade.
+     */
+    const chessAnalysisCache = new AnalysisCacheStore(app.getPath('userData'), 'default')
     // ORBIS_CHESS_ENGINE_HOME lets one installed engine be shared between runs, which is also how it is tested.
-    const chessEngine = new ChessEngine({ home: process.env.ORBIS_CHESS_ENGINE_HOME || join(app.getPath('userData'), 'chess') })
+    const chessEngine = new ChessEngine({
+      home: process.env.ORBIS_CHESS_ENGINE_HOME || join(app.getPath('userData'), 'chess'),
+      cache: chessAnalysisCache
+    })
     /*
      * Tournaments being broadcast publicly.
      *
@@ -4345,9 +4427,18 @@ ${page.text}`, { howMany: 6 })
     chessLive.register(lichessProviderPort(createLichessBroadcasts({ fetchFn: (url, init) => net.fetch(url as string, init as never) })))
     const neurovaJobs = new JobStore(app.getPath('userData'), 'default')
     const neurovaWorkspaces = new WorkspaceStore(app.getPath('userData'))
+    /*
+     * The arcade's scores, runs and preferences.
+     *
+     * One file, for the same reason Chess World's record is six: everything in it is written at the same moment a
+     * run finishes, so splitting it would mean four writes that have to agree. It was in the window's own storage
+     * until now, which meant a second Orbis window kept its own high scores and two people sharing a computer shared
+     * one table. `src/main/games/arcadeStore.ts` says the rest.
+     */
+    const arcadeStore = new ArcadeStore(app.getPath('userData'), 'default')
     // Notes, tasks, whiteboards and workspaces belong to the profile in use, like its browsing and its workflows.
     personalForBrowser = { notes: notesStore, tasks: tasksStore }
-    const personalStores = [notesStore, tasksStore, whiteboardStore, workspacesStore, neurovaStore, neurovaJobs, neurovaWorkspaces, chessStore]
+    const personalStores = [notesStore, tasksStore, whiteboardStore, workspacesStore, neurovaStore, neurovaJobs, neurovaWorkspaces, chessStore, chessData, chessAnalysisCache, arcadeStore, featureVisibility]
     const followProfile = (): Promise<void> =>
       profilesStore
         .active()
@@ -5434,11 +5525,21 @@ ${page.text}`, { howMany: 6 })
 
     registerChessIpc({
       store: chessStore,
+      data: chessData,
       engine: () => chessEngine,
+      cache: () => chessAnalysisCache,
       live: () => chessLive,
       getWindow: () => liveWindow(),
       send: sendToWindow,
       handle
+    })
+
+    registerArcadeIpc({ store: arcadeStore, handle })
+
+    registerFeatureVisibilityIpc({
+      store: featureVisibility,
+      profileId: async () => (await profilesStore.active()).id,
+      getWindow: () => liveWindow()
     })
 
     registerNeurovaIpc2({
@@ -5651,8 +5752,25 @@ ${page.text}`, { howMany: 6 })
     quitFlush.add('your whiteboards', () => whiteboardStore.flush())
     quitFlush.add('your NEUROVA projects', () => neurovaStore.flush())
     quitFlush.add('your chess games', () => chessStore.flush())
+    // The puzzle collection, the Academy record, the lines and notes from Analysis Studio, and the rest. Waited for,
+    // like the games: a puzzle solved -- or a note written -- a moment before closing is held for a fifth of a
+    // second before it is written, so an unwaited save loses it outright.
+    quitFlush.add('your chess settings, puzzles, analyses and progress', () => chessData.flush())
+    quitFlush.add('which features you have showing', () => featureVisibility.flush())
     quitFlush.add('the chess engine', () => chessEngine.shutdown())
+    /*
+     * Closing the store of kept answers, after the engine has stopped.
+     *
+     * There is nothing to wait for here -- every row is committed the moment it is written, which is one of the
+     * reasons this is a database and not a debounced file. Closing it releases the handle, so a backup or an
+     * antivirus scan running while Orbis is shut has nothing of Orbis's open. It comes after the engine so a search
+     * finishing during the close still has somewhere to put its answer.
+     */
+    quitFlush.add('the chess analysis cache', () => { chessAnalysisCache.close(); return Promise.resolve() })
     quitFlush.add('the chess broadcasts', () => { chessLive.unfollow(); return Promise.resolve() })
+    // A game finished a moment before closing is held for a fifth of a second before it is written, so an unwaited
+    // save loses the run outright -- which, for a new best score, is the one loss somebody would notice.
+    quitFlush.add('your game scores', () => arcadeStore.flush())
     quitFlush.add('your NEUROVA jobs', () => neurovaJobs.flush())
     quitFlush.add('the NEUROVA engine session', () => neurovaEngine.shutdown())
     quitFlush.add('your NEUROVA plans and decisions', () => neurovaWorkspaces.flush())

@@ -26,7 +26,21 @@ const MAP = join(ROOT, '..', 'docs', 'ipc-mapping.md')
 // 618 -> 619: files-host:ready, so the Files screen waits for its services instead of racing them.
 // 619 -> 634: Chess World's games, PGN and engine.
 // 634 -> 640: its live broadcasts.
-const CEILING = 640
+// 640 -> 652: everything else Chess World keeps -- the preferences, the puzzle collection and its history, the
+// repertoire, the Academy record, and the study plan. Two channels for each of the five files it is kept in, because
+// a file that cannot be read must not be able to stop the other four being read.
+// 652 -> 654: reading and saving what somebody has worked out about one game (chess:study, chess:save-study). A
+// sixth chess file, kept apart from the games so an analysis that cannot be read cannot cost the game.
+// 654 -> 656: the arcade's scores (arcade:record, arcade:save). One per-profile file, so a high score follows the
+// person rather than the window it was set in. No channel for the leaderboard: it is worked out in shared code.
+// 656 -> 657: `screens:ask` -- "do this on my screens", said in words. One channel, because there is one question:
+// a sentence in, and what really happened out. The six `screen.*` capabilities it drives stay on
+// `control:window-run`, so this is a door onto Orion rather than a second route into the window.
+// 657 -> 660: which features this profile sees (features:visibility, features:set-visible,
+// features:choose-visible). Three, and no more: what is essential, what depends on what and whether a given feature
+// is visible are all worked out in shared code, and a channel for a computed answer would be a second answer to a
+// question that already has one.
+const CEILING = 660
 
 async function* typescriptFiles(dir: string): AsyncGenerator<string> {
   for (const entry of await readdir(dir, { withFileTypes: true })) {

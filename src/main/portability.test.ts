@@ -205,6 +205,8 @@ const BROWSER_LAYER = new Set([
   'main/experience/ipc.ts',
   'main/personal/ipc.ts',
   'main/chess/ipc.ts',
+  // Which features this profile sees: `profileHandle` and a `BrowserWindow` type, nothing else.
+  'main/features/ipc.ts',
   'main/neurova/ipc.ts',
   'main/neurova/ipc2.ts',
   'main/workflows/ipc.ts',
@@ -248,7 +250,15 @@ const BROWSER_LAYER = new Set([
   // import nothing from Electron and move unchanged. That is what makes `pages:compute` a boundary worth having -- the
   // rule it enforces lives in `shared/pages/capabilities.ts`, so porting this file cannot change what a Page is allowed
   // to do.
-  'main/pages/ipc.ts'
+  'main/pages/ipc.ts',
+  // The one door from the window to "do this on my screens". `plainHandle` and the `BrowserWindow` type for the
+  // sender check, and nothing else -- it validates what arrived and hands it on.
+  //
+  // Everything that decides anything is on the other side of the line and tested without a window: which screens go
+  // into the request, what "a little more" is on a real range, which option "the second" is, whether a step may run,
+  // and what a run really did are all in `shared/screenRequests.ts`. `main/screenAgent.ts` holds the model call and
+  // the plan, and imports no Electron either.
+  'main/screenAgentIpc.ts'
 ])
 
 async function* typescriptFiles(dir: string, prefix = ''): AsyncGenerator<{ path: string; relative: string }> {

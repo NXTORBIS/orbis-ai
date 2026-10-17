@@ -20,7 +20,9 @@ import {
 import type { VoiceErrorCode, VoiceState } from '../shared/voiceInput.ts'
 
 test('every input Orbis actually has a microphone in is a known target, and only those', () => {
-  assert.deepEqual(VOICE_TARGETS, ['chat', 'browser-orion', 'search', 'url-bar'])
+  // 'chess' is the blindfold trainer, where somebody holding a position in their head has no reason to be looking
+  // at a keyboard either. It is its own target so a square spoken into it can never land in the search box.
+  assert.deepEqual(VOICE_TARGETS, ['chat', 'browser-orion', 'search', 'url-bar', 'chess'])
 })
 
 test('the default model is a real, locally installable Pulsar size — not a Groq model name', () => {

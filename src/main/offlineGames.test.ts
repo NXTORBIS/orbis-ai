@@ -12,13 +12,24 @@ test('only real network failures count as offline', () => {
   for (const code of [-200, -202, -20, -3, -312, -501]) assert.equal(classifyLoadFailure(code).offline, false, String(code))
 })
 
-test('the library ships twelve games, each searchable by name, category and description', () => {
-  assert.equal(GAMES.length, 12)
-  assert.equal(new Set(GAMES.map((g) => g.id)).size, 12)
+test('every game in the library is its own entry, searchable by name, category and description', () => {
+  /*
+   * A floor and no fixed count.
+   *
+   * This asserted twelve, which is what the library held when it was written, and the assertion then failed the day
+   * somebody added the thirteenth -- with a message about twelve games rather than about their work, so the only
+   * thing to do with it was change the number. A count that has to be edited every time the catalogue grows is not
+   * checking anything; what is worth checking is that no entry was lost and no two share an id.
+   */
+  assert.ok(GAMES.length >= 12, `the library has shrunk to ${GAMES.length}; something was deleted by accident`)
+  assert.equal(new Set(GAMES.map((g) => g.id)).size, GAMES.length, 'two games share an id, so one of them is unreachable')
   assert.ok(searchGames('snake').some((g) => g.id === 'snake'))
   assert.ok(searchGames('', 'puzzle').every((g) => g.categories.includes('puzzle')))
   assert.ok(searchGames('asteroid').some((g) => g.id === 'space-dodger'))
   assert.deepEqual(searchGames('', 'favorites', ['minesweeper']).map((g) => g.id), ['minesweeper'])
+  // The two the owner named by name, still in the library and still called what they are called on screen.
+  assert.equal(GAMES.find((g) => g.id === 'flappy')?.name, 'Glide')
+  assert.equal(GAMES.find((g) => g.id === 'number-puzzle')?.name, 'Fusion 2048')
 })
 
 test('stored data is validated: bad values are dropped, defaults filled, unknown games ignored', () => {

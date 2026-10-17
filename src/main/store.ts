@@ -6,6 +6,7 @@ import type { SecretStorePort } from './platform'
 import { join } from 'node:path'
 import { DEFAULT_IMAGE_PREFERENCES, cleanImagePreferences } from './fastsd/engine.ts'
 import { readBranches } from '../shared/conversationBranch.ts'
+import { readHistorySummary, type HistorySummary } from '../shared/historySummary.ts'
 import { DEFAULT_SOURCE_PREFERENCES, readSourcePreferences } from '../shared/researchSources.ts'
 import type { Conversation, ReasoningEffort, Settings, SettingsUpdate, Theme } from '../shared/types'
 import { CHAT_MODELS, DEFAULT_MODEL, currentModelId } from '../shared/models.ts'
@@ -244,6 +245,31 @@ export class Store {
     if (!ID_PATTERN.test(id)) throw new Error('Invalid conversation id')
     const path = join(this.conversationsDir, `${id}.json`)
     await this.enqueue(path, () => fs.rm(path, { force: true }))
+    const summary = this.summaryPath(id)
+    await this.enqueue(summary, () => fs.rm(summary, { force: true }))
+  }
+
+  /**
+   * The rolling summary of a conversation's older turns, kept BESIDE the conversation (a `summaries` folder next to
+   * `conversations`), not inside its file: the window saves whole conversations and would write over a field it never
+   * loaded. Derived data -- anything unreadable is simply "no summary", and the conversation file is never touched.
+   */
+  private summaryPath(id: string): string {
+    return join(this.conversationsDir, '..', 'summaries', `${id}.json`)
+  }
+
+  async getHistorySummary(id: string): Promise<HistorySummary | null> {
+    if (!ID_PATTERN.test(id)) return null
+    try {
+      return readHistorySummary(JSON.parse(await fs.readFile(this.summaryPath(id), 'utf8')))
+    } catch {
+      return null
+    }
+  }
+
+  async saveHistorySummary(id: string, summary: HistorySummary): Promise<void> {
+    if (!ID_PATTERN.test(id)) return
+    await this.writeJson(this.summaryPath(id), summary)
   }
 
   private async loadSettings(): Promise<StoredSettings> {
