@@ -1,5 +1,8 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
-import { ArrowLeft, Search, Star, Wrench, X } from 'lucide-react'
+import { ArrowLeft, Star, Wrench } from 'lucide-react'
+import { useSurface } from '../../lib/surfaces'
+import { SearchBox, ViewHeader } from '../../ui'
+import { toolkitSurface } from './toolkitSurface'
 import '@jarvis/jarvis.css'
 import './toolkit.css'
 
@@ -154,40 +157,62 @@ export default function ToolkitView({ onClose, opening }: { onClose(): void; ope
 
   const recents = recent.map((id) => byId.get(id)).filter((t): t is ToolEntry => Boolean(t))
 
+  /*
+   * The shelf, as something Orbis can work rather than click at.
+   *
+   * Only the shelf: which tool is open, what is being searched for and which category is showing. A tool's own
+   * screen says what can be done inside it, and the ones that do are listed in `CONTROLLABLE_TOOLS` so a route to
+   * one can be worked out before it is open -- which is how "open the Algorithm Visualizer and set its speed"
+   * reaches a control two levels down without anybody naming the Toolkit.
+   */
+  useSurface(
+    toolkitSurface({
+      tools: registry?.ALL_TOOLS ?? [],
+      categories: registry?.TOOLKIT_CATEGORIES ?? [],
+      loaded: () => registry !== null,
+      failed: () => failed,
+      open: () => openId,
+      // The same handler a card's click calls, so a tool Orbis opens is in the recently used row too.
+      openTool: (id) => (id === null ? setOpenId(null) : choose(id)),
+      search: () => query,
+      setSearch: setQuery,
+      category: () => category,
+      setCategory,
+      favourites: () => favourites,
+      showing: () => visible.length,
+      close: onClose
+    })
+  )
+
   return (
     <div className="tk-view" role="region" aria-label="Toolkit">
-      <header className="tk-head">
-        <button type="button" className="tk-back" onClick={openId ? () => setOpenId(null) : onClose} aria-label={openId ? 'Back to the toolkit' : 'Close the toolkit'}>
-          <ArrowLeft size={16} />
-          <span>{openId ? 'Toolkit' : 'Back'}</span>
-        </button>
-        <div className="tk-title">
-          <Wrench size={18} />
-          <strong>{open ? open.label : 'Toolkit'}</strong>
-          {!open && registry && <small>{registry.ALL_TOOLS.length} tools</small>}
-        </div>
-        {open ? (
-          <button
-            type="button"
-            className={`tk-star${favourites.includes(open.id) ? ' on' : ''}`}
-            onClick={() => toggleFavourite(open.id)}
-            aria-pressed={favourites.includes(open.id)}
-            aria-label={favourites.includes(open.id) ? 'Remove from favourites' : 'Add to favourites'}
-          >
-            <Star size={16} />
+      <ViewHeader
+        className="tk-head"
+        lead={
+          <button type="button" className="tk-back" onClick={openId ? () => setOpenId(null) : onClose} aria-label={openId ? 'Back to the toolkit' : 'Close the toolkit'}>
+            <ArrowLeft size={16} />
+            <span>{openId ? 'Toolkit' : 'Back'}</span>
           </button>
-        ) : (
-          <label className="tk-search">
-            <Search size={15} />
-            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search tools" aria-label="Search tools" autoFocus />
-            {query && (
-              <button type="button" onClick={() => setQuery('')} aria-label="Clear search">
-                <X size={14} />
-              </button>
-            )}
-          </label>
-        )}
-      </header>
+        }
+        icon={<Wrench size={18} aria-hidden />}
+        title={open ? open.label : 'Toolkit'}
+        note={open ? undefined : registry ? `${registry.ALL_TOOLS.length} tools` : 'Opening the toolkit…'}
+        /* Inside a tool there is nothing to search: the row holds the one thing you can do to it instead. */
+        search={open ? undefined : <SearchBox value={query} onChange={setQuery} label="Search tools" autoFocus clearable />}
+        actions={
+          open ? (
+            <button
+              type="button"
+              className={`tk-star${favourites.includes(open.id) ? ' on' : ''}`}
+              onClick={() => toggleFavourite(open.id)}
+              aria-pressed={favourites.includes(open.id)}
+              aria-label={favourites.includes(open.id) ? 'Remove from favourites' : 'Add to favourites'}
+            >
+              <Star size={16} />
+            </button>
+          ) : undefined
+        }
+      />
 
       {failed && <p className="tk-note" role="alert">The toolkit could not be loaded: {failed}</p>}
       {!registry && !failed && <p className="tk-note" role="status">Opening the toolkit…</p>}
