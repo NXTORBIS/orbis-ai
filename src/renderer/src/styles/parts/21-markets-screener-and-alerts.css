@@ -4,7 +4,6 @@
   display: inline-flex;
   gap: 3px;
   padding: 3px;
-  border: 1px solid var(--line);
   border-radius: var(--radius-pill, 999px);
   background: var(--pill-bg);
 }
@@ -12,14 +11,14 @@
 .mk-modes button {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 5px 12px;
+  gap: 4px;
+  padding: 4px 12px;
   border: 0;
   border-radius: var(--radius-pill, 999px);
   background: transparent;
   color: var(--muted);
   font: inherit;
-  font-size: 12px;
+  font-size: 13px;
   cursor: pointer;
 }
 
@@ -31,21 +30,21 @@
 .mk-inline {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   color: var(--faint);
-  font-size: 11.5px;
+  font-size: 11px;
 }
 
 .mk-inline select,
 .mk-inline input {
   height: 26px;
-  padding: 0 6px;
+  padding: 0 4px;
   border: 1px solid var(--line-strong);
-  border-radius: 7px;
+  border-radius: 6px;
   background: var(--pill-bg);
   color: var(--text);
   font: inherit;
-  font-size: 11.5px;
+  font-size: 11px;
 }
 
 .mk-inline input {
@@ -57,7 +56,7 @@
 .mk-screener {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   min-height: 0;
   overflow-y: auto;
   padding: 4px 4px 12px;
@@ -68,9 +67,8 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  padding: 9px 12px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
+  padding: 8px 12px;
+  border-radius: 10px;
   background: var(--rail-bg);
 }
 
@@ -78,17 +76,17 @@
   height: 28px;
   padding: 0 8px;
   border: 1px solid var(--line-strong);
-  border-radius: 8px;
+  border-radius: 6px;
   background: var(--pill-bg);
   color: var(--text);
   font: inherit;
-  font-size: 11.5px;
+  font-size: 11px;
 }
 
 .mk-conditions {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -98,19 +96,19 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
 }
 
 .mk-conditions select,
 .mk-conditions > li > input {
   height: 28px;
-  padding: 0 7px;
+  padding: 0 8px;
   border: 1px solid var(--line-strong);
-  border-radius: 8px;
+  border-radius: 6px;
   background: var(--pill-bg);
   color: var(--text);
   font: inherit;
-  font-size: 11.5px;
+  font-size: 11px;
 }
 
 .mk-conditions > li > input {
@@ -120,24 +118,24 @@
 .mk-table-wrap {
   overflow-x: auto;
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: 10px;
 }
 
 .mk-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 12px;
+  font-size: 13px;
   font-variant-numeric: tabular-nums;
 }
 
 .mk-table th {
   position: sticky;
   top: 0;
-  padding: 7px 10px;
+  padding: 8px 8px;
   border-bottom: 1px solid var(--line-strong);
   background: var(--bar-bg);
   color: var(--faint);
-  font-size: 10.5px;
+  font-size: 10px;
   font-weight: 600;
   text-align: left;
   text-transform: uppercase;
@@ -146,7 +144,7 @@
 }
 
 .mk-table td {
-  padding: 5px 10px;
+  padding: 4px 8px;
   border-bottom: 1px solid var(--line);
   color: var(--muted-strong);
   white-space: nowrap;
@@ -168,14 +166,13 @@
 .mk-screener-foot {
   display: flex;
   align-items: flex-start;
-  gap: 7px;
+  gap: 8px;
   margin: 0;
   padding: 8px 12px;
-  border: 1px solid var(--line);
   border-radius: 10px;
   background: var(--pill-bg);
   color: var(--faint);
-  font-size: 11.5px;
+  font-size: 11px;
   line-height: 1.5;
 }
 
@@ -191,11 +188,11 @@
 
 .mk-saved {
   border-top: 1px solid var(--line);
-  padding-top: 10px;
+  padding-top: 8px;
 }
 
 .mk-saved h5 {
-  margin: 0 0 6px;
+  margin: 0 0 4px;
   color: var(--muted);
   font-size: 11px;
   font-weight: 600;
@@ -206,7 +203,7 @@
 .mk-saved ul {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 4px;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -215,12 +212,11 @@
 .mk-saved li {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  padding: 4px 6px 4px 11px;
-  border: 1px solid var(--line-strong);
+  gap: 8px;
+  padding: 4px 4px 4px 12px;
   border-radius: 999px;
   background: var(--pill-bg);
-  font-size: 11.5px;
+  font-size: 11px;
 }
 
 .mk-saved li > button:first-child {
@@ -232,7 +228,7 @@
 }
 
 .mk-saved li > button:first-child:hover {
-  color: var(--cyan);
+  color: var(--text);
 }
 
 /* ---- alerts */
@@ -240,7 +236,7 @@
 .mk-alerts {
   display: grid;
   grid-template-columns: minmax(320px, 420px) minmax(0, 1fr);
-  gap: 14px;
+  gap: 12px;
   min-height: 0;
   overflow-y: auto;
   padding: 4px 4px 12px;
@@ -249,11 +245,11 @@
 .mk-alert-form {
   display: flex;
   flex-direction: column;
-  gap: 9px;
+  gap: 8px;
   align-self: flex-start;
-  padding: 12px 14px;
+  padding: 12px 12px;
   border: 1px solid var(--line);
-  border-radius: 14px;
+  border-radius: 10px;
   background: var(--rail-bg);
 }
 
@@ -262,77 +258,46 @@
 .mk-alert-head h5 {
   margin: 0;
   color: var(--muted-strong);
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 600;
 }
 
-.mk-alert-target .mk-search {
-  position: relative;
-  margin-top: 0;
-}
-
-.mk-alert-target .mk-results {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
-  right: 0;
-  z-index: 30;
-  max-height: 240px;
-  overflow-y: auto;
-  padding: 6px;
-  border: 1px solid var(--glass-border);
-  border-radius: 12px;
-  background: var(--glass);
-  box-shadow: var(--glass-shadow);
-}
-
-.mk-alert-target .mk-results li button {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  width: 100%;
-  padding: 5px 8px;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--text);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-.mk-alert-target .mk-results li button:hover {
-  background: var(--hover);
-}
+/*
+ * The box you type a market into, and the list it drops down, used to be written out again here. They are not any
+ * more: the box is the window's shared search box and the list is styled once, in the Markets part of the
+ * stylesheet, for everything inside the Markets screen. This panel sits inside that screen, so it was three
+ * copies of the same thing where the only differences were a height nothing ever reached and a stacking number
+ * nothing ever competed with.
+ */
 
 .mk-chip {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 5px 6px 5px 11px;
-  border: 1px solid var(--cyan-dim);
+  padding: 4px 4px 4px 12px;
+  border: 1px solid var(--glass-border);
   border-radius: 999px;
-  background: var(--cyan-fill);
-  font-size: 12px;
+  background: var(--pill-bg);
+  font-size: 13px;
 }
 
 .mk-alert-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
 }
 
 .mk-alert-row select,
 .mk-alert-row > input {
   height: 28px;
-  padding: 0 7px;
+  padding: 0 8px;
   border: 1px solid var(--line-strong);
-  border-radius: 8px;
+  border-radius: 6px;
   background: var(--pill-bg);
   color: var(--text);
   font: inherit;
-  font-size: 11.5px;
+  font-size: 11px;
 }
 
 .mk-alert-row > input {
@@ -351,12 +316,12 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 8px;
 }
 
 .mk-alert-now {
   color: var(--muted);
-  font-size: 11.5px;
+  font-size: 11px;
   font-variant-numeric: tabular-nums;
 }
 
@@ -366,8 +331,8 @@
 }
 
 .mk-history {
-  margin-top: 6px;
-  padding-top: 10px;
+  margin-top: 4px;
+  padding-top: 8px;
   border-top: 1px solid var(--line);
 }
 

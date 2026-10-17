@@ -29,7 +29,7 @@
   align-items: center;
   gap: 8px;
   max-width: 520px;
-  padding: 6px 6px 6px 12px;
+  padding: 4px 4px 4px 12px;
   border-radius: 10px;
   font-size: 13px;
   pointer-events: auto;
@@ -38,7 +38,7 @@
 
 .toast > svg {
   flex-shrink: 0;
-  color: var(--cyan);
+  color: var(--faint);
 }
 
 .toast.warn > svg {
@@ -59,7 +59,7 @@
   align-items: center;
   justify-content: center;
   padding: 24px;
-  background: rgba(0, 0, 0, 0.6);
+  background: var(--scrim);
   backdrop-filter: blur(3px);
   animation: fade 0.15s ease-out;
 }
@@ -70,7 +70,7 @@
   max-height: 100%;
   display: flex;
   flex-direction: column;
-  border-radius: 16px;
+  border-radius: 10px;
 }
 
 .modal.small {
@@ -81,14 +81,14 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 12px 10px 20px;
+  padding: 12px 12px 8px 20px;
   border-bottom: 1px solid var(--glass-border);
 }
 
 .modal-header h2 {
   margin: 0;
   font-family: var(--display);
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -96,11 +96,11 @@
 
 .modal-body {
   overflow-y: auto;
-  padding: 0 20px 14px;
+  padding: 0 20px 12px;
 }
 
 .setting {
-  padding: 14px 0;
+  padding: 12px 0;
   border-bottom: 1px solid var(--glass-border);
 }
 
@@ -116,18 +116,18 @@
 }
 
 .setting:not(.row) .setting-label {
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 }
 
 .setting-label h3 {
   margin: 0;
-  font-size: 13.5px;
+  font-size: 13px;
   font-weight: 600;
 }
 
 .setting-label p {
   margin: 2px 0 0;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--muted);
 }
 
@@ -139,13 +139,13 @@
 
 .key-links {
   display: flex;
-  gap: 14px;
+  gap: 12px;
   margin-top: 8px;
 }
 
 .key-status {
   margin: 8px 0 0;
-  font-size: 12.5px;
+  font-size: 13px;
   color: var(--muted);
 }
 
@@ -158,8 +158,8 @@
 }
 
 .setting-note {
-  margin: 10px 0 0;
-  font-size: 11.5px;
+  margin: 8px 0 0;
+  font-size: 11px;
   color: var(--faint);
 }
 
@@ -167,14 +167,14 @@
 .voice-settings {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   width: 100%;
 }
 
 .voice-model-list {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -185,7 +185,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 10px 12px;
+  padding: 8px 12px;
   border: 1px solid var(--glass-border);
   border-radius: 10px;
   background: var(--pill-bg);
@@ -205,17 +205,17 @@
 .voice-model-info b {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   font-size: 13px;
 }
 
 .voice-model-info small {
   color: var(--muted);
-  font-size: 11.5px;
+  font-size: 11px;
 }
 
 .voice-model-tag {
-  padding: 1px 7px;
+  padding: 1px 8px;
   border-radius: 999px;
   background: var(--active);
   color: var(--muted);
@@ -233,7 +233,7 @@
 .voice-model-actions {
   display: flex;
   flex-shrink: 0;
-  gap: 6px;
+  gap: 4px;
 }
 
 .voice-progress {
@@ -255,40 +255,40 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 8px;
 }
 
 .voice-settings-row label {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 12.5px;
+  gap: 4px;
+  font-size: 13px;
   color: var(--muted);
 }
 
 .voice-settings-row select {
   min-width: 160px;
   height: 30px;
-  padding: 0 10px;
+  padding: 0 8px;
   border: 1px solid var(--pill-border);
   border-radius: 999px;
   background: var(--pill-bg);
   color: var(--text);
   font: inherit;
-  font-size: 12.5px;
+  font-size: 13px;
 }
 
 .field-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
+  gap: 8px;
 }
 
 .field {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  font-size: 11.5px;
+  font-size: 11px;
   color: var(--muted);
 }
 
@@ -297,14 +297,14 @@
   flex-shrink: 0;
   padding: 3px;
   border: 1px solid var(--input-border);
-  border-radius: 9px;
+  border-radius: 10px;
   background: var(--input-bg);
 }
 
 .segmented button {
-  padding: 4px 11px;
+  padding: 4px 12px;
   border-radius: 6px;
-  font-size: 12.5px;
+  font-size: 13px;
   color: var(--muted);
 }
 
@@ -371,7 +371,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 9px 0;
+  padding: 8px 0;
   border-bottom: 1px solid var(--glass-border);
   font-size: 13px;
 }
@@ -381,7 +381,7 @@
 }
 
 kbd {
-  padding: 2px 7px;
+  padding: 2px 8px;
   border: 1px solid var(--glass-border);
   border-radius: 6px;
   background: var(--input-bg);
@@ -398,7 +398,7 @@ kbd {
 .setting-faces {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 8px;
   margin-top: 12px;
 }
 
@@ -420,7 +420,7 @@ kbd {
    */
   isolation: isolate;
   background: radial-gradient(circle at 34% 28%, var(--av-from), var(--av-to) 78%);
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 4px 10px var(--shadow-color);
   transition:
     transform 0.2s ease,
     opacity 0.2s ease,
@@ -442,7 +442,7 @@ kbd {
 .setting-face.is-chosen {
   opacity: 1;
   box-shadow:
-    0 6px 14px rgba(0, 0, 0, 0.45),
+    0 6px 14px var(--shadow-color),
     0 0 0 2px var(--av-rim);
 }
 
@@ -489,9 +489,17 @@ kbd {
   pointer-events: none;
   --sun-x: calc(50% + 29% * sin(var(--av-turn)));
   --sun-y: calc(50% - 29% * cos(var(--av-turn)));
+  /*
+   * The glint and the sheen stay white, and must.
+   *
+   * These are not interface colours: a world's body is fixed artwork in both themes (`shared/avatars.ts` hands
+   * over `#02141f`, `#080520` and the like, which never follow the theme), and this layer is the sun landing on
+   * it. Drawn in `--text` they invert with the theme, so in the light theme the brightest point of a lit sphere
+   * becomes a navy smudge and the world reads as damaged. Light is white whatever the window is set to.
+   */
   background:
-    radial-gradient(circle at var(--sun-x) var(--sun-y), rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.22) 15%, rgba(255, 255, 255, 0) 29%),
-    radial-gradient(ellipse 58% 44% at calc(var(--sun-x) + 6%) calc(var(--sun-y) + 5%), rgba(255, 255, 255, 0.26), rgba(255, 255, 255, 0) 70%),
+    radial-gradient(circle at var(--sun-x) var(--sun-y), color-mix(in srgb, var(--text) 95%, transparent), color-mix(in srgb, var(--text) 22%, transparent) 15%, transparent 29%),
+    radial-gradient(ellipse 58% 44% at calc(var(--sun-x) + 6%) calc(var(--sun-y) + 5%), color-mix(in srgb, var(--text) 26%, transparent), transparent 70%),
     radial-gradient(ellipse 70% 40% at 60% 93%, color-mix(in srgb, var(--av-rim) 30%, transparent), transparent 70%),
     radial-gradient(circle at var(--sun-x) var(--sun-y), transparent 44%, color-mix(in srgb, #000 76%, var(--av-to)) 96%);
 }
@@ -521,7 +529,8 @@ kbd {
     from var(--av-turn),
     var(--av-rim),
     color-mix(in srgb, var(--av-rim) 30%, transparent) 30%,
-    rgba(255, 255, 255, 0.05) 55%,
+    /* The cool spot on the rim, where the light is glancing away. White for the same reason as the glint. */
+    color-mix(in srgb, var(--text) 5%, transparent) 55%,
     color-mix(in srgb, var(--av-rim) 26%, transparent) 78%,
     var(--av-rim)
   );
@@ -766,13 +775,15 @@ kbd {
   border-radius: 50%;
   pointer-events: none;
   opacity: 0.5;
+  /* Lit specks and shadowed pits on the body's surface, white and black for the same reason as the glint above:
+     this is relief catching a light, not interface colour, and it inverts into nonsense if it follows the theme. */
   background:
-    radial-gradient(circle at 22% 72%, rgba(255, 255, 255, 0.16) 0 6%, transparent 7%),
-    radial-gradient(circle at 68% 18%, rgba(255, 255, 255, 0.12) 0 4%, transparent 5%),
-    radial-gradient(circle at 78% 64%, rgba(0, 0, 0, 0.22) 0 7%, transparent 8%),
+    radial-gradient(circle at 22% 72%, color-mix(in srgb, var(--text) 16%, transparent) 0 6%, transparent 7%),
+    radial-gradient(circle at 68% 18%, color-mix(in srgb, var(--text) 12%, transparent) 0 4%, transparent 5%),
+    radial-gradient(circle at 78% 64%, var(--rail-bg) 0 7%, transparent 8%),
     repeating-conic-gradient(
       from calc(var(--av-turn) + 90deg) at 46% 44%,
-      rgba(255, 255, 255, 0.05) 0deg 6deg,
+      color-mix(in srgb, var(--text) 5%, transparent) 0deg 6deg,
       transparent 6deg 18deg
     );
 }

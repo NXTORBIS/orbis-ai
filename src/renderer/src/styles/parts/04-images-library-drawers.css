@@ -14,22 +14,21 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 22px 28px 12px;
+  padding: 20px 28px 12px;
 }
 
-.images-head h2 {
-  margin: 0 0 4px;
-  font-family: var(--display);
-  font-size: 22px;
-  letter-spacing: 0.04em;
-}
+/*
+ * The title used to be drawn here, in the display font at 22px -- which is the size and the font the window's own
+ * `.view-head h2` has always given a screen's title. Images wears the shared header now, so the rule said nothing
+ * and would only have been somewhere for the two to drift apart.
+ */
 
 .images-grid {
   display: grid;
   flex: 1;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   align-content: start;
-  gap: 14px;
+  gap: 12px;
   padding: 8px 28px 28px;
   overflow-y: auto;
 }
@@ -39,8 +38,7 @@
   aspect-ratio: 1;
   margin: 0;
   overflow: hidden;
-  border: 1px solid var(--glass-border);
-  border-radius: 14px;
+  border-radius: 10px;
   background: repeating-conic-gradient(rgba(128, 128, 128, 0.18) 0 25%, transparent 0 50%) 0 0 / 16px 16px;
 }
 
@@ -66,9 +64,15 @@
   align-items: center;
   gap: 8px;
   padding: 28px 8px 8px 12px;
-  font-size: 12px;
-  color: #fff;
-  background: linear-gradient(transparent, rgba(0, 0, 0, 0.78));
+  font-size: 13px;
+  /*
+   * The caption lies on the picture, and a picture is neither light nor dark -- it is whatever the person made. So
+   * this pair does not follow the theme, on purpose: a dark plate and white type, the way a caption is burnt into a
+   * photograph anywhere. Using --scrim and --text here made slate type on a slate veil as soon as the theme went
+   * light, which is unreadable over a pale photograph and over a dark one both.
+   */
+  color: var(--on-media);
+  background: linear-gradient(transparent, var(--over-media));
   opacity: 0;
   transition: opacity 0.15s;
 }
@@ -83,6 +87,13 @@
   min-width: 0;
 }
 
+/*
+ * Edit, download, open the chat it came from.
+ *
+ * These need no reveal of their own: the caption they sit in is already hidden until you point at the card or
+ * reach it with the keyboard, a few rules above. Hiding them again would have been a second rule saying what one
+ * already says.
+ */
 .images-actions {
   display: flex;
   gap: 4px;
@@ -93,31 +104,16 @@
   place-items: center;
   width: 28px;
   height: 28px;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.16);
-  color: #fff;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--text) 16%, transparent);
+  color: var(--text);
   cursor: pointer;
 }
 
 .images-actions button:hover {
-  background: rgba(255, 255, 255, 0.3);
+  background: color-mix(in srgb, var(--text) 30%, transparent);
 }
 
-.images-empty {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  color: var(--muted);
-}
-
-.images-empty p {
-  margin: 10px 0 0;
-  font-size: 15px;
-  color: var(--text);
-}
 
 /* ================= Drawers ================= */
 
@@ -128,7 +124,7 @@
   z-index: 30;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   padding: 12px;
   border-top: 0;
   border-bottom: 0;
@@ -158,7 +154,7 @@
   flex: 1;
   overflow-y: auto;
   margin: 0 -6px;
-  padding: 0 6px;
+  padding: 0 4px;
 }
 
 .drawer-list section {
@@ -166,12 +162,12 @@
 }
 
 .drawer-list h3 {
-  margin: 6px 6px 4px;
+  margin: 4px 4px 4px;
 }
 
 .drawer-empty {
-  margin: 6px;
-  font-size: 12.5px;
+  margin: 4px;
+  font-size: 13px;
   color: var(--faint);
 }
 
@@ -180,7 +176,7 @@
   align-items: center;
   min-height: 34px;
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: 6px;
 }
 
 .chat-row:hover {
@@ -198,26 +194,47 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 8px;
+  padding: 4px 8px;
   font-size: 13px;
   text-align: left;
 }
 
+/*
+ * Quiet until the row is under the pointer or holds the keyboard focus.
+ *
+ * Opacity, not `display: none`: a display-none button is not in the tab order, so hiding it that way deletes it for
+ * anybody using the keyboard. The space is reserved either way, so the title never changes width as you move down.
+ */
 .row-actions {
-  display: none;
+  display: flex;
   gap: 2px;
   padding-right: 4px;
+  opacity: 0;
+  transition: opacity 120ms ease;
 }
 
 .chat-row:hover .row-actions,
+.chat-row:focus-within .row-actions,
 .chat-row.active .row-actions {
-  display: flex;
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .row-actions {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .row-actions {
+    transition: none;
+  }
 }
 
 .chat-row.confirm {
   gap: 4px;
-  padding: 3px 4px 3px 10px;
-  font-size: 12.5px;
+  padding: 3px 4px 3px 8px;
+  font-size: 13px;
   background: var(--hover);
 }
 
@@ -241,10 +258,10 @@
 
 .activity-item {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   padding: 8px;
-  border-radius: 8px;
-  font-size: 12.5px;
+  border-radius: 6px;
+  font-size: 13px;
 }
 
 .activity-item:hover {
@@ -254,7 +271,7 @@
 .activity-item svg {
   flex-shrink: 0;
   margin-top: 2px;
-  color: var(--cyan);
+  color: var(--faint);
 }
 
 .activity-item.warn svg {
@@ -285,20 +302,15 @@
   place-items: center;
   width: 18px;
   height: 18px;
-  border: 1.5px solid var(--cyan-dim);
+  border: 1.5px solid var(--glass-border);
   border-radius: 50%;
-  box-shadow: 0 0 8px var(--cyan-glow-soft);
 }
 
 .edge-handle span {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--cyan);
-}
-
-.edge-handle:hover {
-  box-shadow: 0 0 14px var(--cyan-glow);
+  background: var(--panel);
 }
 
 /* ================= Files tabs ================= */
@@ -312,10 +324,10 @@
 .files-tab {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 14px;
+  gap: 4px;
+  padding: 4px 12px;
   border: none;
-  border-radius: 8px;
+  border-radius: 6px;
   background: transparent;
   color: var(--faint);
   font: inherit;
@@ -336,8 +348,8 @@
 
 .files-tab-count {
   min-width: 18px;
-  padding: 1px 5px;
-  border-radius: 9px;
+  padding: 1px 4px;
+  border-radius: 10px;
   background: var(--glass-border);
   font-size: 11px;
   text-align: center;
@@ -366,21 +378,21 @@
 /* The Files screen takes the whole window, sidebar included; "Back to chat" is the way out. */
 .files-fullscreen { position: fixed; inset: 82px 0 var(--mstrip-reserved, 0px) 0; z-index: 400; }
 .files-back {
-  display: inline-flex; align-items: center; gap: 8px; margin-right: 16px; padding: 7px 14px;
-  border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.14)); border-radius: 999px;
-  background: rgba(255, 255, 255, 0.05); color: inherit; font: inherit; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 8px; margin-right: 16px; padding: 8px 12px;
+  border: 1px solid var(--glass-border, var(--line-strong)); border-radius: 999px;
+  background: color-mix(in srgb, var(--text) 5%, transparent); color: inherit; font: inherit; cursor: pointer;
 }
-.files-back:hover { background: rgba(255, 255, 255, 0.1); }
+.files-back:hover { background: color-mix(in srgb, var(--text) 10%, transparent); }
 .files-fullscreen .images-head { justify-content: flex-start; }
 
 /* ---- Full-page screens: Files, Chance and OrbisEye use the whole window under the address bar -------------------- */
 .files-fullscreen { inset: 40px 0 var(--mstrip-reserved, 0px) 0; }
 /* Files keeps its tabs, in one slim row; the way back is a round arrow. */
-.files-fullscreen .images-head { height: 40px; min-height: 0; padding: 4px 10px; gap: 8px; align-items: center; }
+.files-fullscreen .images-head { height: 40px; min-height: 0; padding: 4px 8px; gap: 8px; align-items: center; }
 .files-fullscreen .files-back { width: 30px; height: 30px; margin-right: 4px; padding: 0; justify-content: center; border-radius: 50%; font-size: 0; }
 /* Single-purpose full-page screens have no header at all, only a floating way back. */
-.eye-full { position: fixed; inset: 40px 0 var(--mstrip-reserved, 0px) 0; z-index: 400; background: #02050a; overflow: hidden; }
-.eye-frame { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: #02050a; color-scheme: dark; }
+.eye-full { position: fixed; inset: 40px 0 var(--mstrip-reserved, 0px) 0; z-index: 400; background: var(--bg-edge); overflow: hidden; }
+.eye-frame { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: var(--bg-edge); color-scheme: dark; }
 .eye-back { position: absolute; top: 10px; left: 10px; z-index: 2; width: 34px; height: 34px; display: grid; place-items: center; padding: 0; border-radius: 50%; cursor: pointer;
-  color: var(--text); background: rgba(6, 12, 20, .7); border: 1px solid var(--glass-border); backdrop-filter: blur(8px); transition: border-color .2s, transform .15s; }
+  color: var(--text); background: var(--glass); border: 1px solid var(--glass-border); backdrop-filter: blur(8px); transition: border-color .2s, transform .15s; }
 .eye-back:hover { border-color: var(--cyan); transform: translateX(-1px); }

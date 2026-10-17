@@ -25,7 +25,7 @@
   z-index: 70;
   gap: 2px;
   max-height: min(70vh, 560px);
-  padding: 6px;
+  padding: 4px;
   overflow-y: auto;
   border-radius: 10px;
   /* The light leak: a hairline that is brighter along the top edge, where a light above the window would catch it.
@@ -40,13 +40,13 @@
   /* Two shadows, not one: a wide soft dispersion that separates the card from the page, and a tight dark one
      directly under it that stops the card floating. */
   box-shadow:
-    0 24px 60px -12px rgba(0, 0, 0, 0.55),
-    0 4px 14px -4px rgba(0, 0, 0, 0.4);
+    0 24px 60px -12px var(--shadow-deep),
+    0 4px 14px -4px var(--shadow-color);
 }
 
 /* A heading over a group of rows -- Recent, Bookmarks -- shown only when nothing has been typed. */
 .omni-section {
-  padding: 8px 10px 4px;
+  padding: 8px 8px 4px;
   color: var(--faint);
   font-family: var(--mono);
   font-size: 10px;
@@ -60,11 +60,11 @@
 .omni-item {
   display: flex;
   align-items: center;
-  gap: 11px;
+  gap: 12px;
   /* 12px above and below the text. A row of two lines is tall enough already; the padding is what stops the list
      reading as a solid block of text with no gaps for the eye to rest in. */
-  padding: 12px 8px 12px 11px;
-  border-radius: 8px;
+  padding: 12px 8px 12px 12px;
+  border-radius: 6px;
   color: var(--text);
   cursor: pointer;
   /* Instant, deliberately. A row that fades in as the pointer crosses it is a row that is still fading when the
@@ -103,7 +103,7 @@
 .omni-favicon {
   width: 16px;
   height: 16px;
-  border-radius: 3px;
+  border-radius: 6px;
   object-fit: contain;
 }
 
@@ -147,7 +147,7 @@
 .omni-detail {
   overflow: hidden;
   color: var(--muted);
-  font-size: 11.5px;
+  font-size: 11px;
   font-weight: 400;
   line-height: 1.25;
   white-space: nowrap;
@@ -160,7 +160,7 @@
 
 .omni-star {
   flex-shrink: 0;
-  color: var(--cyan);
+  color: var(--text);
   fill: currentColor;
 }
 
@@ -196,7 +196,7 @@
   justify-content: flex-end;
   align-items: center;
   margin-top: 4px;
-  padding: 7px 8px 3px;
+  padding: 8px 8px 3px;
   border-top: 1px solid var(--line);
 }
 
@@ -216,7 +216,7 @@
    not something anybody guesses. */
 .omni-keys {
   margin-right: auto;
-  padding: 3px 6px;
+  padding: 3px 4px;
   overflow: hidden;
   color: var(--faint);
   font-size: 11px;
@@ -224,10 +224,10 @@
 }
 
 .omni-keys kbd {
-  margin-left: 10px;
-  padding: 1px 5px;
+  margin-left: 8px;
+  padding: 1px 4px;
   border: 1px solid var(--line);
-  border-radius: 4px;
+  border-radius: 6px;
   background: var(--pill-bg);
   color: var(--muted);
   font-family: var(--mono);
@@ -248,27 +248,37 @@
  * Every <select> in the window, in the window's own colours.
  *
  * It had the browser's default white face on the dark surfaces (the Update channel menu was a white box with
- * near-invisible text), and its list opened as a white sheet. `color-scheme` is what makes the list follow.
+ * near-invisible text), and its list opened as a white sheet. What makes the list follow is `color-scheme`, and
+ * that is now set once on the whole window beside the palette (tokens.generated.css) rather than here, because a
+ * copy here could only ever be right for one theme at a time.
  */
 select {
-  color-scheme: dark;
   appearance: none;
   min-height: 34px;
-  padding: 6px 30px 6px 12px;
+  padding: 4px 28px 4px 12px;
   border-radius: 10px;
-  border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.12));
-  background-color: color-mix(in srgb, var(--panel, #11161d) 85%, transparent);
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239fb3c0' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  border: 1px solid var(--glass-border, var(--line-strong));
+  background-color: color-mix(in srgb, var(--panel, var(--surface-2)) 85%, transparent);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2378889a' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 10px center;
-  color: var(--text, #e8eef3);
+  color: var(--text);
   font: inherit;
   font-size: 13px;
   cursor: pointer;
   transition: border-color 0.2s, box-shadow 0.2s;
 }
-select:hover { border-color: color-mix(in srgb, var(--cyan, #38bdd8) 45%, transparent); }
-select:focus-visible { outline: none; border-color: var(--cyan, #38bdd8); box-shadow: 0 0 0 3px color-mix(in srgb, var(--cyan, #38bdd8) 25%, transparent); }
-select option { background: #0e141b; color: #e8eef3; }
-:root[data-theme='light'] select { color-scheme: light; }
-:root[data-theme='light'] select option { background: #ffffff; color: #101820; }
+select:hover { border-color: color-mix(in srgb, var(--cyan) 45%, transparent); }
+select:focus-visible { outline: none; border-color: var(--cyan); box-shadow: 0 0 0 3px color-mix(in srgb, var(--cyan) 25%, transparent); }
+/*
+ * An <option> is drawn by Windows, not by us, so what it needs from here is a colour: --option-bg, the token for
+ * exactly this list, which already has a value per theme. There used to be a `[data-theme='light']` block here
+ * repeating it as a white literal, which is how one feature's stylesheet starts keeping its own second opinion
+ * about the light theme. The light/dark scheme the drop-down's own frame and scrollbar follow is set with the
+ * palette, so it cannot disagree with these colours.
+ *
+ * The chevron is a picture, so its line cannot be `currentColor`. It is one mid blue-grey chosen to read on both
+ * faces of the control rather than only the dark one: against the dark face it measures 4.65:1 and against the
+ * light face 3.56:1, where the pale grey it used to be managed 2.13:1 on light -- a chevron you had to hunt for.
+ */
+select option { background: var(--option-bg); color: var(--text); }

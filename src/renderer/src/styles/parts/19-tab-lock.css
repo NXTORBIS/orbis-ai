@@ -20,9 +20,8 @@
 }
 
 .tl-group {
-  padding: 10px 12px;
-  border-radius: 12px;
-  border: 1px solid var(--line-strong);
+  padding: 8px 12px;
+  border-radius: 10px;
   background: var(--pill-bg);
 }
 
@@ -42,13 +41,13 @@
 
 .tl-meta {
   color: var(--faint);
-  font-size: 11.5px;
+  font-size: 11px;
 }
 
 .tl-group-buttons {
   display: flex;
   flex-wrap: wrap;
-  gap: 5px;
+  gap: 4px;
   margin-left: auto;
 }
 
@@ -57,7 +56,7 @@
   align-items: center;
   gap: 4px;
   padding: 3px 8px;
-  font-size: 11.5px;
+  font-size: 11px;
   line-height: 1.5;
 }
 
@@ -83,14 +82,14 @@
 
 .pw-form.inner {
   max-width: none;
-  margin-top: 10px;
+  margin-top: 8px;
   padding: 12px;
   background: var(--pill-bg-strong);
 }
 
 .tl-actions {
   display: flex;
-  gap: 6px;
+  gap: 4px;
   margin-top: 12px;
 }
 
@@ -105,7 +104,7 @@
 .tl-presets legend {
   padding: 0;
   color: var(--faint);
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .tl-presets label {
@@ -114,7 +113,7 @@
   align-items: baseline;
   gap: 4px 8px;
   margin-top: 8px;
-  padding: 8px 10px;
+  padding: 8px 8px;
   border-radius: 10px;
   border: 1px solid var(--line);
   cursor: pointer;
@@ -126,21 +125,21 @@
 }
 
 .tl-presets label b {
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 600;
 }
 
 .tl-presets label span {
   grid-column: 2;
   color: var(--faint);
-  font-size: 11.5px;
+  font-size: 11px;
   line-height: 1.45;
 }
 
 .tl-presets.row {
   display: flex;
-  gap: 6px;
-  margin: 10px 0 14px;
+  gap: 4px;
+  margin: 8px 0 12px;
 }
 
 .tl-presets.row label {
@@ -152,14 +151,14 @@
 .tl-block {
   width: 100%;
   max-width: 560px;
-  margin-top: 18px;
+  margin-top: 16px;
   padding-top: 16px;
   border-top: 1px solid var(--line);
 }
 
 .tl-block h4 {
   margin: 0 0 4px;
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 600;
 }
 
@@ -171,30 +170,30 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  padding: 6px 0;
+  gap: 8px;
+  padding: 4px 0;
   color: var(--text);
-  font-size: 12.5px;
+  font-size: 13px;
 }
 
 .tl-delay select,
 .tl-rule-add select {
-  padding: 5px 8px;
-  border-radius: 8px;
+  padding: 4px 8px;
+  border-radius: 6px;
   border: 1px solid var(--line-strong);
   background: var(--pill-bg);
   color: var(--text);
   font: inherit;
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .tl-switch {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 5px 0;
+  padding: 4px 0;
   color: var(--text);
-  font-size: 12.5px;
+  font-size: 13px;
   cursor: pointer;
 }
 
@@ -208,8 +207,8 @@
 .tl-rules {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  margin: 10px 0;
+  gap: 4px;
+  margin: 8px 0;
   padding: 0;
   list-style: none;
 }
@@ -218,11 +217,10 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 10px;
+  padding: 4px 8px;
   border-radius: 10px;
-  border: 1px solid var(--line);
   background: var(--pill-bg);
-  font-size: 12.5px;
+  font-size: 13px;
 }
 
 .tl-rules li > svg {
@@ -231,13 +229,13 @@
 }
 
 .tl-rules code {
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .tl-rules li > span {
   margin-left: auto;
   color: var(--faint);
-  font-size: 11.5px;
+  font-size: 11px;
 }
 
 .tl-icon {
@@ -246,7 +244,7 @@
   width: 24px;
   height: 24px;
   border: 0;
-  border-radius: 7px;
+  border-radius: 6px;
   background: transparent;
   color: var(--faint);
   cursor: pointer;
@@ -259,20 +257,20 @@
 
 .tl-rule-add {
   display: flex;
-  gap: 6px;
+  gap: 4px;
   margin-top: 8px;
 }
 
 .tl-rule-add input {
   flex: 1 1 auto;
   min-width: 0;
-  padding: 6px 10px;
-  border-radius: 9px;
+  padding: 4px 8px;
+  border-radius: 10px;
   border: 1px solid var(--line-strong);
   background: var(--pill-bg);
   color: var(--text);
   font: inherit;
-  font-size: 12.5px;
+  font-size: 13px;
 }
 
 /* What a security policy actually does, listed. Not a status light: sentences, because the useful thing to know is what
@@ -287,7 +285,7 @@
   position: relative;
   padding: 3px 0 3px 16px;
   color: var(--faint);
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.5;
 }
 
@@ -299,5 +297,5 @@
   width: 4px;
   height: 4px;
   border-radius: 50%;
-  background: var(--cyan);
+  background: var(--panel);
 }

@@ -42,9 +42,9 @@
   gap: 4px;
   width: max-content;
   max-width: min(320px, calc(100vw - 32px));
-  padding: 11px 13px;
+  padding: 12px 12px;
   border: 1px solid var(--glass-border);
-  border-radius: 12px;
+  border-radius: 10px;
   background: var(--glass);
   box-shadow: var(--glass-shadow);
   backdrop-filter: blur(14px);
@@ -53,7 +53,7 @@
 }
 
 .mk-explain-card strong {
-  font-size: 12.5px;
+  font-size: 13px;
   color: var(--text);
 }
 
@@ -62,12 +62,12 @@
   font-size: 10px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--cyan);
+  color: var(--text);
 }
 
 .mk-explain-card p {
   margin: 0;
-  font-size: 11.5px;
+  font-size: 11px;
   line-height: 1.55;
   color: var(--muted-strong);
 }
@@ -76,8 +76,8 @@
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
-  margin-top: 6px;
-  padding-top: 6px;
+  margin-top: 4px;
+  padding-top: 4px;
   border-top: 1px solid var(--line);
 }
 
@@ -87,24 +87,24 @@
   background: transparent;
   color: var(--muted);
   font: inherit;
-  font-size: 10.5px;
+  font-size: 10px;
   padding: 2px 8px;
   cursor: pointer;
 }
 
 .mk-explain-related button:hover {
-  color: var(--cyan);
-  border-color: var(--cyan-dim);
+  color: var(--text);
+  border-color: var(--glass-border);
 }
 
 .mk-introduce {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 11px 13px;
-  border: 1px solid var(--cyan-dim);
-  border-radius: 12px;
-  background: var(--cyan-fill);
+  gap: 4px;
+  padding: 12px 12px;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  background: var(--panel);
 }
 
 .mk-introduce-head {
@@ -115,7 +115,7 @@
 }
 
 .mk-introduce-head strong {
-  font-size: 12.5px;
+  font-size: 13px;
 }
 
 .mk-introduce-head button {
@@ -130,7 +130,7 @@
 
 .mk-introduce p {
   margin: 0;
-  font-size: 11.5px;
+  font-size: 11px;
   line-height: 1.55;
   color: var(--muted-strong);
 }
@@ -156,48 +156,48 @@
  */
 .markets-view[data-density='minimal'] .mk-row,
 .markets-view[data-density='minimal'] .mk-results li {
-  padding-top: 9px;
-  padding-bottom: 9px;
+  padding-top: 8px;
+  padding-bottom: 8px;
 }
 
 .markets-view[data-density='minimal'] .mk-body,
 .markets-view[data-density='balanced'] .mk-body {
-  gap: 14px;
+  gap: 12px;
 }
 
 .markets-view[data-density='detailed'] .mk-row,
 .markets-view[data-density='detailed'] .mk-results li {
-  padding-top: 5px;
-  padding-bottom: 5px;
+  padding-top: 4px;
+  padding-bottom: 4px;
 }
 
 .markets-view[data-density='dense'] .mk-body,
 .markets-view[data-density='maximum'] .mk-body {
-  gap: 9px;
+  gap: 8px;
 }
 
 .markets-view[data-density='dense'] .mk-row,
 .markets-view[data-density='dense'] .mk-results li {
   padding-top: 4px;
   padding-bottom: 4px;
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .markets-view[data-density='maximum'] .mk-row,
 .markets-view[data-density='maximum'] .mk-results li {
   padding-top: 2px;
   padding-bottom: 2px;
-  font-size: 11.5px;
+  font-size: 11px;
 }
 
 .markets-view[data-density='maximum'] .mk-side,
 .markets-view[data-density='dense'] .mk-side {
-  gap: 7px;
+  gap: 8px;
 }
 
 @media (max-width: 760px) {
   .mk-onboard {
-    padding: 14px 16px 16px;
+    padding: 12px 16px 16px;
   }
 
   .mk-onboard-body h1 {
@@ -240,14 +240,14 @@
 .mk-more-menu button {
   display: flex;
   align-items: center;
-  gap: 7px;
-  padding: 6px 9px;
+  gap: 8px;
+  padding: 4px 8px;
   border: 0;
-  border-radius: 7px;
+  border-radius: 6px;
   background: transparent;
   color: var(--text);
   font: inherit;
-  font-size: 12px;
+  font-size: 13px;
   text-align: left;
   cursor: pointer;
 }
@@ -263,8 +263,8 @@
 .mk-chart-jump {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 3px 10px;
+  gap: 4px;
+  padding: 3px 8px;
   border: 1px solid var(--line);
   border-radius: var(--radius-pill, 999px);
   background: transparent;
@@ -275,41 +275,41 @@
 }
 
 .mk-chart-jump:hover {
-  color: var(--cyan);
-  border-color: var(--cyan-dim);
+  color: var(--text);
+  border-color: var(--glass-border);
 }
 
 .mk-learn-line {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   flex-wrap: wrap;
   justify-content: center;
-  margin: 6px 0 0;
-  font-size: 11.5px;
-  color: var(--cyan);
+  margin: 4px 0 0;
+  font-size: 11px;
+  color: var(--text);
 }
 
 /* Markets Experience, in Settings. The same preferences the first-launch questions set. */
 .mk-xp h4 {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
 }
 
 .mk-xp-levels {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
-  gap: 7px;
-  margin: 10px 0;
+  gap: 8px;
+  margin: 8px 0;
 }
 
 .mk-xp-mine {
-  margin-left: 6px;
-  padding: 1px 6px;
+  margin-left: 4px;
+  padding: 1px 4px;
   border: 1px solid var(--cyan-dim);
   border-radius: var(--radius-pill, 999px);
-  font-size: 9.5px;
+  font-size: 10px;
   font-style: normal;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -320,12 +320,12 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 11px 13px;
-  margin-bottom: 10px;
-  border: 1px solid var(--cyan-dim);
-  border-radius: 12px;
-  background: var(--cyan-fill);
-  font-size: 12px;
+  padding: 12px 12px;
+  margin-bottom: 8px;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  background: var(--panel);
+  font-size: 13px;
 }
 
 .mk-xp-confirm p {
@@ -335,7 +335,7 @@
 
 .mk-xp-confirm span {
   display: flex;
-  gap: 7px;
+  gap: 8px;
 }
 
 .mk-xp-confirm button,
@@ -343,14 +343,14 @@
 .mk-xp-actions button {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 5px 13px;
+  gap: 4px;
+  padding: 4px 12px;
   border: 1px solid var(--line);
   border-radius: var(--radius-pill, 999px);
   background: transparent;
   color: var(--text);
   font: inherit;
-  font-size: 11.5px;
+  font-size: 11px;
   cursor: pointer;
 }
 
@@ -367,19 +367,18 @@
 .mk-xp-summary {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 6px;
-  margin: 0 0 10px;
+  gap: 4px;
+  margin: 0 0 8px;
 }
 
 .mk-xp-summary > div {
-  padding: 7px 10px;
-  border: 1px solid var(--line);
-  border-radius: 9px;
+  padding: 8px 8px;
+  border-radius: 10px;
   background: var(--pill-bg);
 }
 
 .mk-xp-summary dt {
-  font-size: 9.5px;
+  font-size: 10px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--faint);
@@ -387,7 +386,7 @@
 
 .mk-xp-summary dd {
   margin: 2px 0 0;
-  font-size: 11.5px;
+  font-size: 11px;
   color: var(--text);
   text-transform: capitalize;
   overflow: hidden;
@@ -397,9 +396,9 @@
 .mk-xp-detail {
   display: flex;
   flex-direction: column;
-  gap: 9px;
-  margin-top: 10px;
-  padding-top: 10px;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 8px;
   border-top: 1px solid var(--line);
 }
 
@@ -410,6 +409,6 @@
 .mk-xp-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 7px;
+  gap: 8px;
   margin-top: 4px;
 }

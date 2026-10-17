@@ -17,7 +17,7 @@
   height: 28px;
   flex: none;
   border: 0;
-  border-radius: 8px;
+  border-radius: 6px;
   background: transparent;
   color: var(--faint);
   cursor: pointer;
@@ -38,8 +38,8 @@
 .orb-mic.recording,
 .url-mic.recording,
 .tool-btn.recording {
-  color: var(--danger, #ff6b6b);
-  background: color-mix(in srgb, var(--danger, #ff6b6b) 16%, transparent);
+  color: var(--danger, var(--red));
+  background: color-mix(in srgb, var(--danger, var(--red)) 16%, transparent);
   animation: mic-live 1.6s ease-in-out infinite;
 }
 
@@ -50,7 +50,7 @@
 
 @keyframes mic-live {
   50% {
-    background: color-mix(in srgb, var(--danger, #ff6b6b) 34%, transparent);
+    background: color-mix(in srgb, var(--danger, var(--red)) 34%, transparent);
   }
 }
 

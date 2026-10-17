@@ -5,13 +5,13 @@
    mislead them, so it is given the same weight on screen as the number it belongs to. */
 
 .page-field textarea {
-  padding: 7px 10px;
+  padding: 8px 8px;
   border: 1px solid var(--line-strong);
-  border-radius: 8px;
+  border-radius: 6px;
   background: var(--pill-bg);
   color: var(--text);
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.5;
   resize: vertical;
   outline: none;
@@ -30,10 +30,10 @@
 .page-notes {
   display: flex;
   gap: 8px;
-  padding: 9px 12px;
+  padding: 8px 12px;
   border: 1px solid var(--line);
-  border-left: 2px solid var(--cyan-dim);
-  border-radius: 8px;
+  border-left: 2px solid var(--line-strong);
+  border-radius: 6px;
   background: var(--pill-bg);
   color: var(--muted);
 }
@@ -41,7 +41,7 @@
 .page-notes > svg {
   flex: 0 0 auto;
   margin-top: 2px;
-  color: var(--cyan-dim);
+  color: var(--faint);
 }
 
 .page-notes ul {
@@ -70,7 +70,6 @@
 .page-plot {
   width: 100%;
   height: auto;
-  border: 1px solid var(--line);
   border-radius: 10px;
   background: var(--pill-bg);
 }
@@ -94,7 +93,7 @@
 .page-legend {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   font-family: var(--mono);
   font-size: 11px;
   color: var(--muted);
@@ -123,7 +122,7 @@
   display: flex;
   flex-direction: column;
   gap: 3px;
-  padding: 9px 12px;
+  padding: 8px 12px;
   background: var(--pill-bg);
 }
 
@@ -136,27 +135,26 @@
 
 .page-stat strong {
   font-family: var(--mono);
-  font-size: 14px;
+  font-size: 13px;
   font-variant-numeric: tabular-nums;
   color: var(--text);
 }
 
 .page-result {
-  padding: 10px 14px;
-  border: 1px solid var(--line);
+  padding: 8px 12px;
   border-radius: 10px;
   background: var(--pill-bg);
 }
 
 .page-result h4 {
-  margin: 0 0 6px;
-  font-size: 12px;
+  margin: 0 0 4px;
+  font-size: 13px;
   color: var(--muted-strong);
 }
 
 .page-result p {
-  margin: 0 0 6px;
-  font-size: 12px;
+  margin: 0 0 4px;
+  font-size: 13px;
   color: var(--text);
 }
 
@@ -190,7 +188,7 @@
   display: block;
   font-style: normal;
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: 10px;
   text-transform: none;
   letter-spacing: 0;
   color: var(--faint);
@@ -200,7 +198,7 @@
    must not look like a cell that was empty, because they mean opposite things about the data. */
 
 .page-cell-missing {
-  background: rgba(255, 255, 255, 0.02);
+  background: color-mix(in srgb, var(--text) 2%, transparent);
 }
 
 .page-cell-empty {
@@ -232,14 +230,14 @@
 .mk-problem {
   display: flex;
   align-items: flex-start;
-  gap: 6px;
+  gap: 4px;
   margin: 0;
   padding: 8px 12px;
   border: 1px solid var(--red);
-  border-radius: 9px;
+  border-radius: 10px;
   background: color-mix(in srgb, var(--red) 8%, transparent);
   color: var(--red);
-  font-size: 11.5px;
+  font-size: 11px;
   line-height: 1.55;
 }
 
@@ -291,30 +289,14 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text);
   cursor: pointer;
 }
 
-.mk-search-field {
-  display: flex;
-  align-items: center;
-  gap: 6px;
+/* The shared search box draws itself; this panel owns only how much of the row it takes. */
+.mk-compare-add .ui-search {
   flex: 1 1 220px;
-  padding: 5px 10px;
-  border: 1px solid var(--line-strong);
-  border-radius: 8px;
-  background: var(--pill-bg);
-  color: var(--faint);
-}
-
-.mk-search-field input {
-  flex: 1;
-  border: 0;
-  background: none;
-  color: var(--text);
-  font: inherit;
-  outline: none;
 }
 
 /* ---- 1. the drawing toolbar */
@@ -322,7 +304,7 @@
 .mk-draw {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
   position: relative;
 }
 
@@ -331,7 +313,6 @@
   align-items: center;
   gap: 2px;
   padding: 3px;
-  border: 1px solid var(--line);
   border-radius: 10px;
   background: var(--pill-bg);
   width: fit-content;
@@ -341,9 +322,9 @@
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  padding: 5px 7px;
+  padding: 4px 8px;
   border: 0;
-  border-radius: 7px;
+  border-radius: 6px;
   background: none;
   color: var(--muted);
   cursor: pointer;
@@ -378,8 +359,7 @@
 }
 
 .mk-draw-list {
-  padding: 8px 10px;
-  border: 1px solid var(--line);
+  padding: 8px 8px;
   border-radius: 10px;
   background: var(--pill-bg);
 }
@@ -388,8 +368,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 6px;
+  gap: 8px;
+  margin-bottom: 4px;
   font-size: 11px;
   color: var(--faint);
 }
@@ -405,7 +385,7 @@
   border-radius: 999px;
   background: none;
   color: var(--muted);
-  font-size: 10.5px;
+  font-size: 10px;
   cursor: pointer;
 }
 
@@ -435,18 +415,18 @@
   background: none;
   color: var(--muted);
   cursor: pointer;
-  padding: 3px 5px;
+  padding: 3px 4px;
   border-radius: 6px;
 }
 
 .mk-draw-pick {
   display: flex !important;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   flex: 1;
   min-width: 0;
   text-align: left;
-  font-size: 11.5px;
+  font-size: 11px;
 }
 
 .mk-draw-pick em {
@@ -463,8 +443,7 @@
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
-  padding: 6px 10px;
-  border: 1px solid var(--line);
+  padding: 4px 8px;
   border-radius: 10px;
   background: var(--pill-bg);
 }
@@ -491,11 +470,11 @@
   flex: 1 1 160px;
   padding: 4px 8px;
   border: 1px solid var(--line-strong);
-  border-radius: 7px;
+  border-radius: 6px;
   background: var(--bar-bg);
   color: var(--text);
   font: inherit;
-  font-size: 12px;
+  font-size: 13px;
   outline: none;
 }
 
@@ -517,16 +496,15 @@
 
 .mk-compare-chips {
   display: flex;
-  gap: 5px;
+  gap: 4px;
   flex-wrap: wrap;
 }
 
 .mk-compare-chip {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   padding: 3px 8px;
-  border: 1px solid var(--line-strong);
   border-radius: 999px;
   background: var(--pill-bg);
   font-size: 11px;
@@ -558,7 +536,7 @@
 }
 
 .mk-compare-intervals button {
-  padding: 3px 9px;
+  padding: 3px 8px;
   border: 1px solid var(--pill-border);
   border-radius: 999px;
   background: var(--pill-bg);
@@ -600,14 +578,14 @@
 .mk-compare-results button {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   width: 100%;
-  padding: 5px 8px;
+  padding: 4px 8px;
   border: 0;
-  border-radius: 7px;
+  border-radius: 6px;
   background: none;
   color: var(--text);
-  font-size: 12px;
+  font-size: 13px;
   text-align: left;
   cursor: pointer;
 }
@@ -619,7 +597,6 @@
 .mk-compare-chart {
   width: 100%;
   height: auto;
-  border: 1px solid var(--line);
   border-radius: 10px;
   background: var(--pill-bg);
 }
@@ -638,29 +615,21 @@
 .mk-compare-label {
   fill: var(--faint);
   font-family: var(--mono);
-  font-size: 9.5px;
+  font-size: 10px;
 }
 
 .mk-compare-dot {
   display: inline-block;
   width: 8px;
   height: 8px;
-  margin-right: 6px;
+  margin-right: 4px;
   border-radius: 50%;
   vertical-align: -1px;
 }
 
-.mk-compare-empty {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 18px;
-  justify-content: center;
-}
-
 .mk-corr h4 {
-  margin: 0 0 6px;
-  font-size: 12px;
+  margin: 0 0 4px;
+  font-size: 13px;
   color: var(--muted-strong);
 }
 
@@ -673,7 +642,7 @@
 
 .mk-body.is-workspace {
   display: block;
-  padding: 10px;
+  padding: 8px;
 }
 
 .mk-ws {
@@ -687,7 +656,7 @@
 .mk-ws-bar {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   color: var(--faint);
 }
 
@@ -760,7 +729,6 @@
   min-width: 0;
   min-height: 0;
   margin: 3px;
-  border: 1px solid var(--line);
   border-radius: 10px;
   background: var(--pill-bg);
   overflow: hidden;
@@ -771,15 +739,15 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 4px 6px;
+  padding: 4px 4px;
   border-bottom: 1px solid var(--line);
   background: var(--bar-bg);
 }
 
 .mk-ws-head select {
-  padding: 2px 6px;
+  padding: 2px 4px;
   border: 1px solid var(--line-strong);
-  border-radius: 7px;
+  border-radius: 6px;
   background: var(--pill-bg);
   color: var(--text);
   font: inherit;
@@ -795,7 +763,7 @@
   border-radius: 999px;
   background: none;
   color: var(--faint);
-  font-size: 10.5px;
+  font-size: 10px;
   cursor: pointer;
 }
 
@@ -820,12 +788,12 @@
 }
 
 .mk-ws-menu button {
-  padding: 5px 8px;
+  padding: 4px 8px;
   border: 0;
-  border-radius: 7px;
+  border-radius: 6px;
   background: none;
   color: var(--muted);
-  font-size: 11.5px;
+  font-size: 11px;
   text-align: left;
   cursor: pointer;
 }
@@ -846,17 +814,10 @@
   padding: 8px;
 }
 
-.mk-ws-empty {
-  display: block;
-  padding: 16px;
-  text-align: center;
-  line-height: 1.6;
-}
-
 .mk-mode-workspace {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
 }
 
 /* ---- 4. the margin panel */
@@ -870,14 +831,14 @@
 /* Above the switch, not below it. Somebody reading downward meets it before the control. */
 .mk-margin-warn {
   display: flex;
-  gap: 9px;
-  padding: 10px 12px;
+  gap: 8px;
+  padding: 8px 12px;
   border: 1px solid var(--amber);
   border-left-width: 3px;
   border-radius: 10px;
   background: color-mix(in srgb, var(--amber) 7%, transparent);
   color: var(--muted-strong);
-  font-size: 11.5px;
+  font-size: 11px;
   line-height: 1.6;
 }
 
@@ -890,42 +851,40 @@
 .mk-margin-controls {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
 .mk-margin-arm {
-  padding: 10px 12px;
-  border: 1px solid var(--line-strong);
+  padding: 8px 12px;
   border-radius: 10px;
   background: var(--pill-bg);
 }
 
 .mk-margin-arm p {
   margin: 0 0 8px;
-  font-size: 11.5px;
+  font-size: 11px;
   line-height: 1.6;
   color: var(--muted);
 }
 
 .mk-margin-arm div {
   display: flex;
-  gap: 6px;
+  gap: 4px;
 }
 
 .mk-margin-arm button {
-  padding: 5px 12px;
-  border: 1px solid var(--pill-border);
-  border-radius: 8px;
+  padding: 4px 12px;
+  border-radius: 6px;
   background: var(--pill-bg);
   color: var(--text);
-  font-size: 12px;
+  font-size: 13px;
   cursor: pointer;
 }
 
 .mk-margin-lever {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 4px;
   max-width: 460px;
 }
 
@@ -936,9 +895,8 @@
 .mk-margin-health {
   display: flex;
   align-items: flex-start;
-  gap: 9px;
-  padding: 10px 12px;
-  border: 1px solid var(--line);
+  gap: 8px;
+  padding: 8px 12px;
   border-left-width: 3px;
   border-radius: 10px;
   background: var(--pill-bg);
@@ -946,7 +904,7 @@
 
 .mk-margin-health strong {
   display: block;
-  font-size: 12.5px;
+  font-size: 13px;
   color: var(--text);
 }
 
@@ -990,26 +948,25 @@
 .mk-validate {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   padding: 12px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: 10px;
   background: var(--pill-bg);
 }
 
 .mk-validate h5 {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   margin: 0;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--muted-strong);
 }
 
 .mk-validate-head {
   display: flex;
   align-items: center;
-  gap: 18px;
+  gap: 16px;
   flex-wrap: wrap;
 }
 
@@ -1034,17 +991,17 @@
 }
 
 .mk-validate-headline > small {
-  font-size: 10.5px;
+  font-size: 10px;
 }
 
 /* Above the numbers, because it says this is not a forecast. */
 .mk-validate-note {
   margin: 0;
-  padding: 8px 11px;
+  padding: 8px 12px;
   border: 1px solid var(--line-strong);
-  border-left: 3px solid var(--cyan-dim);
-  border-radius: 9px;
-  font-size: 11.5px;
+  border-left: 3px solid var(--line-strong);
+  border-radius: 10px;
+  font-size: 11px;
   line-height: 1.6;
   color: var(--muted);
 }
@@ -1072,7 +1029,7 @@
 .mk-carlo-label {
   fill: var(--faint);
   font-family: var(--mono);
-  font-size: 9.5px;
+  font-size: 10px;
 }
 
 /* ---- 6. the trigger editor */
@@ -1086,10 +1043,10 @@
 .mk-triggers-intro {
   display: flex;
   align-items: flex-start;
-  gap: 9px;
-  padding: 10px 12px;
+  gap: 8px;
+  padding: 8px 12px;
   border: 1px solid var(--line);
-  border-left: 3px solid var(--cyan-dim);
+  border-left: 3px solid var(--line-strong);
   border-radius: 10px;
   background: var(--pill-bg);
 }
@@ -1097,12 +1054,12 @@
 .mk-triggers-intro > svg {
   flex: none;
   margin-top: 1px;
-  color: var(--cyan);
+  color: var(--faint);
 }
 
 .mk-triggers-intro p {
   margin: 0;
-  font-size: 11.5px;
+  font-size: 11px;
   line-height: 1.6;
   color: var(--muted);
 }
@@ -1112,15 +1069,14 @@
   flex-direction: column;
   gap: 8px;
   padding: 12px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: 10px;
   background: var(--pill-bg);
 }
 
 .mk-alert-condition {
   flex: 1;
   min-width: 0;
-  font-size: 11.5px;
+  font-size: 11px;
   color: var(--muted);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1142,10 +1098,10 @@
 }
 
 .mk-screen-group {
-  padding: 8px 10px;
+  padding: 8px 8px;
   border: 1px dashed var(--line-strong);
   border-radius: 10px;
-  background: color-mix(in srgb, var(--cyan) 3%, transparent);
+  background: var(--panel);
 }
 
 .mk-screen-group > header {

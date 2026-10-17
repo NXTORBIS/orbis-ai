@@ -12,9 +12,9 @@
 .pref-offer-tag {
   flex-shrink: 0;
   padding: 2px 8px;
-  border: 1px solid var(--cyan-dim);
+  border: 1px solid var(--glass-border);
   border-radius: 999px;
-  color: var(--cyan);
+  color: var(--faint);
   font-size: 11px;
   letter-spacing: 0.02em;
   text-transform: uppercase;

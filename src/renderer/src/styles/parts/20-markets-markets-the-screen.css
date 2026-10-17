@@ -17,12 +17,11 @@
 .mk-results li {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 6px 10px;
+  gap: 8px;
+  padding: 4px 8px;
   border-radius: 10px;
-  border: 1px solid var(--line);
   background: var(--pill-bg);
-  font-size: 12.5px;
+  font-size: 13px;
 }
 
 /* The symbol.
@@ -37,7 +36,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 12px;
+  font-size: 13px;
   letter-spacing: 0.02em;
 }
 
@@ -48,7 +47,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--faint);
-  font-size: 11.5px;
+  font-size: 11px;
 }
 
 .mk-venue {
@@ -76,7 +75,7 @@
   gap: 3px;
   min-width: 74px;
   justify-content: flex-end;
-  font-size: 11.5px;
+  font-size: 11px;
 }
 
 .mk-change.up {
@@ -116,7 +115,7 @@
 
 .mk-quiet {
   color: var(--faint);
-  font-size: 11.5px;
+  font-size: 11px;
   border: 0;
   background: transparent;
   padding: 4px 2px;
@@ -127,7 +126,7 @@
   align-items: center;
   gap: 8px;
   margin-top: 8px;
-  padding: 0 10px;
+  padding: 0 8px;
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-pill, 999px);
   background: var(--pill-bg);
@@ -142,7 +141,7 @@
   background: transparent;
   color: var(--text);
   font: inherit;
-  font-size: 12.5px;
+  font-size: 13px;
   outline: none;
 }
 
@@ -160,7 +159,7 @@
 }
 
 .markets-view .view-head {
-  gap: 10px;
+  gap: 8px;
   /* Four section tabs, a search box and two buttons: on a narrow window these wrap as a group rather than leaving the
      close button stranded on a line of its own. */
   flex-wrap: wrap;
@@ -188,9 +187,9 @@
 .mk-head-state {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   color: var(--faint);
-  font-size: 11.5px;
+  font-size: 11px;
 }
 
 .mk-conn {
@@ -217,6 +216,17 @@
   color: var(--red);
 }
 
+/*
+ * A search box with its matches dropping out from under it.
+ *
+ * Three panels -- alerts, the holding ticket, a new strategy -- each ask which market you mean, and each used to
+ * carry its own copy of these rules. One wrapper says "the list hangs off this box" and the list below is drawn
+ * the same way everywhere in Markets, which is the point: the same question should not look like three questions.
+ */
+.markets-view .mk-find {
+  position: relative;
+}
+
 /* The search sits in the header, and its results float over the body rather than pushing it down. */
 .markets-view .view-actions .mk-search {
   position: relative;
@@ -234,9 +244,9 @@
   z-index: 40;
   max-height: 320px;
   overflow-y: auto;
-  padding: 6px;
+  padding: 4px;
   border: 1px solid var(--glass-border);
-  border-radius: 12px;
+  border-radius: 10px;
   background: var(--glass);
   box-shadow: var(--glass-shadow);
 }
@@ -246,9 +256,9 @@
   align-items: baseline;
   gap: 8px;
   width: 100%;
-  padding: 6px 8px;
+  padding: 4px 8px;
   border: 0;
-  border-radius: 8px;
+  border-radius: 6px;
   background: transparent;
   color: var(--text);
   font: inherit;
@@ -271,16 +281,16 @@
 .mk-body {
   display: grid;
   grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
-  gap: 14px;
+  gap: 12px;
   min-height: 0;
   flex: 1 1 auto;
-  padding: 0 4px 10px;
+  padding: 0 4px 8px;
 }
 
 .mk-side {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   min-height: 0;
   overflow-y: auto;
   padding-right: 4px;
@@ -289,7 +299,7 @@
 .mk-main {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   min-height: 0;
   overflow-y: auto;
 }
@@ -307,7 +317,6 @@
   flex-wrap: wrap;
   gap: 4px;
   padding: 3px;
-  border: 1px solid var(--line);
   border-radius: var(--radius-pill, 999px);
   background: var(--pill-bg);
 }
@@ -316,15 +325,15 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
+  gap: 4px;
   flex: 1 1 auto;
-  padding: 6px 10px;
+  padding: 4px 8px;
   border: 0;
   border-radius: var(--radius-pill, 999px);
   background: transparent;
   color: var(--muted);
   font: inherit;
-  font-size: 11.5px;
+  font-size: 11px;
   cursor: pointer;
 }
 
@@ -346,8 +355,7 @@
   display: inline-flex;
   gap: 2px;
   padding: 2px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 6px;
   background: var(--pill-bg);
 }
 
@@ -374,12 +382,11 @@
      the one part of the line that says what the counts are counting. */
   flex-wrap: wrap;
   row-gap: 2px;
-  gap: 10px;
-  padding: 7px 10px;
-  border: 1px solid var(--line);
+  gap: 8px;
+  padding: 8px 8px;
   border-radius: 10px;
   background: var(--rail-bg);
-  font-size: 12px;
+  font-size: 13px;
   font-variant-numeric: tabular-nums;
 }
 
@@ -398,29 +405,29 @@
 .mk-breadth small {
   margin-left: auto;
   color: var(--faint);
-  font-size: 10.5px;
+  font-size: 10px;
 }
 
 .mk-sub {
   display: flex;
   align-items: baseline;
   gap: 8px;
-  margin: 6px 0 0;
+  margin: 4px 0 0;
   color: var(--muted-strong);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
 }
 
 .mk-sub small {
   color: var(--faint);
-  font-size: 10.5px;
+  font-size: 10px;
   font-weight: 400;
 }
 
 .mk-rank {
   width: 16px;
   color: var(--faint);
-  font-size: 10.5px;
+  font-size: 10px;
   font-variant-numeric: tabular-nums;
   text-align: right;
 }
@@ -428,7 +435,7 @@
 .mk-row-name {
   display: flex;
   align-items: baseline;
-  gap: 7px;
+  gap: 8px;
   flex: 1 1 auto;
   min-width: 0;
   /* Nothing inside may draw outside this button. The price sits immediately after it. */
@@ -443,7 +450,7 @@
 }
 
 .mk-row-name:hover b {
-  color: var(--cyan);
+  color: var(--text);
 }
 
 .mk-vol {
@@ -469,9 +476,9 @@
   justify-content: center;
   gap: 1px;
   min-height: 46px;
-  padding: 6px 8px;
+  padding: 4px 8px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 6px;
   background: var(--hover);
   color: var(--text);
   font: inherit;
@@ -480,18 +487,18 @@
 }
 
 .mk-tile b {
-  font-size: 11.5px;
+  font-size: 11px;
   letter-spacing: 0.01em;
 }
 
 .mk-tile span {
-  font-size: 10.5px;
+  font-size: 10px;
   font-variant-numeric: tabular-nums;
 }
 
 .mk-tile.up {
-  border-color: rgba(62, 229, 138, 0.3);
-  background: rgba(62, 229, 138, 0.14);
+  border-color: color-mix(in srgb, var(--green) 30%, transparent);
+  background: color-mix(in srgb, var(--green) 14%, transparent);
 }
 
 .mk-tile.up span {
@@ -499,8 +506,8 @@
 }
 
 .mk-tile.down {
-  border-color: rgba(255, 77, 109, 0.3);
-  background: rgba(255, 77, 109, 0.13);
+  border-color: color-mix(in srgb, var(--red) 30%, transparent);
+  background: color-mix(in srgb, var(--red) 13%, transparent);
 }
 
 .mk-tile.down span {
@@ -512,7 +519,7 @@
 }
 
 .mk-tile:hover {
-  border-color: var(--cyan-dim);
+  border-color: var(--glass-border);
 }
 
 /* ---- watchlists */
@@ -520,7 +527,7 @@
 .mk-list-head {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
 }
 
 .mk-list-head select {
@@ -529,11 +536,11 @@
   height: 30px;
   padding: 0 8px;
   border: 1px solid var(--line-strong);
-  border-radius: 8px;
+  border-radius: 6px;
   background: var(--pill-bg);
   color: var(--text);
   font: inherit;
-  font-size: 12px;
+  font-size: 13px;
 }
 
 /* ---- one market */
@@ -541,10 +548,9 @@
 .mk-detail-head {
   display: flex;
   align-items: flex-start;
-  gap: 14px;
-  padding: 12px 14px;
-  border: 1px solid var(--line);
-  border-radius: 14px;
+  gap: 12px;
+  padding: 12px 12px;
+  border-radius: 10px;
   background: var(--rail-bg);
 }
 
@@ -568,7 +574,7 @@
 
 .mk-sym {
   color: var(--muted-strong);
-  font-size: 11.5px;
+  font-size: 11px;
   font-weight: 600;
 }
 
@@ -594,16 +600,15 @@
 .mk-detail-actions {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
 }
 
 .mk-stats {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 18px;
-  padding: 8px 14px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
+  gap: 4px 16px;
+  padding: 8px 12px;
+  border-radius: 10px;
   background: var(--pill-bg);
   color: var(--faint);
   font-size: 11px;
@@ -611,10 +616,10 @@
 
 .mk-stats b {
   color: var(--text);
-  font-size: 12px;
+  font-size: 13px;
   font-variant-numeric: tabular-nums;
   font-weight: 600;
-  margin-left: 5px;
+  margin-left: 4px;
 }
 
 /* ---- the chart */
@@ -637,19 +642,18 @@
   height: 28px;
   padding: 0 8px;
   border: 1px solid var(--line-strong);
-  border-radius: 8px;
+  border-radius: 6px;
   background: var(--pill-bg);
   color: var(--text);
   font: inherit;
-  font-size: 11.5px;
+  font-size: 11px;
 }
 
 .mk-chart {
   position: relative;
   min-height: 240px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: rgba(0, 0, 0, 0.28);
+  border-radius: 10px;
+  background: var(--rail-bg);
   overflow: hidden;
 }
 
@@ -661,13 +665,13 @@
   border-radius: 999px;
   background: var(--pill-bg);
   color: var(--faint);
-  font-size: 10.5px;
+  font-size: 10px;
 }
 
 .mk-legend {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 4px;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -676,9 +680,8 @@
 .mk-legend li {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 3px 4px 3px 9px;
-  border: 1px solid var(--line-strong);
+  gap: 4px;
+  padding: 3px 4px 3px 8px;
   border-radius: 999px;
   background: var(--pill-bg);
   color: var(--muted);
@@ -700,9 +703,8 @@
 .mk-readout {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 14px;
-  padding: 6px 10px;
-  border: 1px solid var(--line);
+  gap: 4px 12px;
+  padding: 4px 8px;
   border-radius: 10px;
   background: var(--pill-bg);
   color: var(--faint);
@@ -721,9 +723,8 @@
 .mk-book-head {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 18px;
-  padding: 7px 12px;
-  border: 1px solid var(--line);
+  gap: 4px 16px;
+  padding: 8px 12px;
   border-radius: 10px;
   background: var(--pill-bg);
   color: var(--faint);
@@ -733,14 +734,14 @@
 .mk-book-head b {
   color: var(--text);
   font-variant-numeric: tabular-nums;
-  margin-left: 5px;
+  margin-left: 4px;
 }
 
 .mk-book-cols {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
-  margin-top: 10px;
+  margin-top: 8px;
 }
 
 .mk-book-cols h5 {
@@ -763,8 +764,8 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 0.8fr);
   gap: 8px;
-  padding: 2px 6px;
-  font-size: 11.5px;
+  padding: 2px 4px;
+  font-size: 11px;
   font-variant-numeric: tabular-nums;
   overflow: hidden;
 }
@@ -779,11 +780,11 @@
 }
 
 .mk-ladder.is-bid .mk-depth {
-  background: rgba(62, 229, 138, 0.14);
+  background: color-mix(in srgb, var(--green) 14%, transparent);
 }
 
 .mk-ladder.is-ask .mk-depth {
-  background: rgba(255, 77, 109, 0.13);
+  background: color-mix(in srgb, var(--red) 13%, transparent);
 }
 
 .mk-ladder.is-bid .mk-lvl-price {
@@ -815,7 +816,7 @@
 .mk-tape table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 11.5px;
+  font-size: 11px;
   font-variant-numeric: tabular-nums;
 }
 
@@ -823,7 +824,7 @@
   padding: 4px 8px;
   border-bottom: 1px solid var(--line);
   color: var(--faint);
-  font-size: 10.5px;
+  font-size: 10px;
   font-weight: 600;
   text-align: left;
   text-transform: uppercase;
@@ -847,18 +848,23 @@
   color: var(--red);
 }
 
-/* ---- nothing here */
+/*
+ * ---- nothing here
+ *
+ * Both of these say what the shared `.view-empty` says, in the space a Markets panel leaves: a line of dim text
+ * and nothing drawn round it. The dashed box the small one carried made every quiet panel look like a slot
+ * waiting to be filled.
+ */
 
 .mk-empty {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 8px;
   flex: 1 1 auto;
-  min-height: 220px;
-  padding: 30px;
-  color: var(--muted);
+  padding: 16px;
+  color: var(--faint);
   text-align: center;
 }
 
@@ -867,20 +873,14 @@
   max-width: 44ch;
 }
 
-.mk-empty svg {
-  color: var(--faint);
-}
-
 .mk-empty-small {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: 8px;
-  padding: 14px;
-  border: 1px dashed var(--line-strong);
-  border-radius: 12px;
-  color: var(--muted);
-  font-size: 12px;
+  padding: 8px 0;
+  color: var(--faint);
+  font-size: var(--text-md, 13px);
 }
 
 .mk-empty-small p {

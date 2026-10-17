@@ -8,38 +8,26 @@
   flex-direction: column;
   gap: 4px;
   width: 264px;
-  padding: 10px 10px 8px;
+  padding: 8px 8px 8px;
   border-right: 1px solid var(--line-strong);
   background: var(--rail-bg);
   transition: width 0.22s cubic-bezier(0.4, 0, 0.2, 1), padding 0.22s;
 }
 
-/* A short cyan scan-line on the edge: the HUD accent that marks this as Orbis. */
-.sidebar::after {
-  content: '';
-  position: absolute;
-  top: 14%;
-  right: -1px;
-  width: 1px;
-  height: 28%;
-  background: linear-gradient(180deg, transparent, var(--cyan-dim), transparent);
-  pointer-events: none;
-}
-
 .sidebar.collapsed {
   align-items: center;
   width: 60px;
-  padding: 10px 8px 8px;
+  padding: 8px 8px 8px;
 }
 
 .sb-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 6px;
+  gap: 4px;
   width: 100%;
   min-height: 42px;
-  margin-bottom: 6px;
+  margin-bottom: 4px;
 }
 
 .sidebar.collapsed .sb-head {
@@ -54,8 +42,8 @@
 .sb-brand {
   display: inline-flex;
   align-items: center;
-  gap: 9px;
-  padding: 5px 8px 5px 5px;
+  gap: 8px;
+  padding: 4px 8px 4px 4px;
   border-radius: 10px;
   color: var(--muted);
   cursor: pointer;
@@ -76,7 +64,7 @@
   place-items: center;
   width: 34px;
   height: 34px;
-  border-radius: 9px;
+  border-radius: 10px;
   color: var(--muted);
   cursor: pointer;
 }
@@ -117,12 +105,17 @@
   flex-shrink: 0;
   object-fit: contain;
   user-select: none;
-  /* The ring is dark glass; a faint light edge keeps it readable on the black bar. */
-  filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.55));
-}
-
-:root[data-theme='light'] .orbis-glass-mark {
-  filter: none;
+  /*
+   * The ring is dark glass, so it needs an edge to come off the bar at all. The edge is mixed from --text, which
+   * means it is a pale halo on the dark theme and a soft dark outline on the light one -- the same idea, drawn the
+   * way round each theme needs.
+   *
+   * There used to be a `:root[data-theme='light']` rule under here turning the edge off. That only ever fired for
+   * the forced light theme: on a machine set to light with Orbis following the system there is no data-theme
+   * attribute at all, so the light window kept the dark theme's halo. Taking the colour from the token covers all
+   * four combinations with one rule.
+   */
+  filter: drop-shadow(0 0 1px color-mix(in srgb, var(--text) 55%, transparent));
 }
 
 .bar-logo-toggle {
@@ -159,9 +152,9 @@
   gap: 12px;
   width: 100%;
   min-height: 36px;
-  padding: 0 10px;
+  padding: 0 8px;
   border-radius: 10px;
-  font-size: 14px;
+  font-size: 13px;
   text-align: left;
   color: var(--muted-strong);
   cursor: pointer;
@@ -188,10 +181,6 @@
   color: var(--text);
 }
 
-.sb-nav-item.active svg {
-  color: var(--cyan);
-}
-
 .sb-nav-item.active::before,
 .sb-row.active::before {
   content: '';
@@ -200,9 +189,8 @@
   bottom: 8px;
   left: -10px;
   width: 3px;
-  border-radius: 0 3px 3px 0;
+  border-radius: 0 6px 6px 0;
   background: var(--cyan);
-  box-shadow: 0 0 10px var(--cyan-glow);
 }
 
 .sidebar.collapsed .sb-nav-item.active::before {
@@ -216,11 +204,11 @@
 
 .sb-badge {
   min-width: 20px;
-  padding: 1px 6px;
+  padding: 1px 4px;
   border-radius: 999px;
   background: var(--pill-bg-strong);
   font-family: var(--mono);
-  font-size: 10.5px;
+  font-size: 10px;
   text-align: center;
   color: var(--muted);
 }
@@ -229,7 +217,7 @@
   flex: 1;
   min-height: 0;
   margin: 8px -10px 0;
-  padding: 0 10px 8px;
+  padding: 0 8px 8px;
   overflow-y: auto;
 }
 
@@ -242,8 +230,8 @@
   align-items: center;
   gap: 8px;
   height: 36px;
-  margin: 4px 0 6px;
-  padding: 0 4px 0 10px;
+  margin: 4px 0 4px;
+  padding: 0 4px 0 8px;
   border: 1px solid var(--input-border);
   border-radius: 10px;
   background: var(--input-bg);
@@ -273,8 +261,8 @@
   align-items: center;
   gap: 4px;
   width: 100%;
-  padding: 6px 10px;
-  border-radius: 8px;
+  padding: 4px 8px;
+  border-radius: 6px;
   font-size: 13px;
   color: var(--muted);
   cursor: pointer;
@@ -294,7 +282,7 @@
 
 .sb-group-label {
   display: block;
-  margin: 10px 10px 4px;
+  margin: 8px 8px 4px;
   font-family: var(--mono);
   font-size: 10px;
   letter-spacing: 0.12em;
@@ -307,7 +295,7 @@
   display: flex;
   align-items: center;
   min-height: 34px;
-  border-radius: 9px;
+  border-radius: 10px;
 }
 
 .sb-row:hover,
@@ -325,8 +313,8 @@
   align-items: center;
   gap: 8px;
   min-width: 0;
-  padding: 6px 10px;
-  font-size: 13.5px;
+  padding: 4px 8px;
+  font-size: 13px;
   text-align: left;
   color: var(--muted-strong);
   cursor: pointer;
@@ -337,17 +325,40 @@
   color: var(--text);
 }
 
+/*
+ * Rename, pin and delete are kept quiet until you are on the row.
+ *
+ * Hidden with opacity rather than `display: none`: a display-none button is out of the tab order, so the keyboard
+ * could never reach rename or delete at all. Opacity keeps the button where it is -- the row is the same width
+ * whether the icons show or not, so the list does not jump as the pointer crosses it.
+ */
 .sb-row-actions {
-  display: none;
+  display: flex;
   flex-shrink: 0;
   align-items: center;
   gap: 1px;
   margin-right: 3px;
+  opacity: 0;
+  transition: opacity 120ms ease;
 }
 
 .sb-row:hover .sb-row-actions,
-.sb-row:focus-within .sb-row-actions {
-  display: flex;
+.sb-row:focus-within .sb-row-actions,
+.sb-row.menu-open .sb-row-actions {
+  opacity: 1;
+}
+
+/* A touch screen has no pointer to hover with, so there the icons simply stay. */
+@media (hover: none) {
+  .sb-row-actions {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sb-row-actions {
+    transition: none;
+  }
 }
 
 .sb-row-action {
@@ -355,7 +366,7 @@
   place-items: center;
   width: 26px;
   height: 26px;
-  border-radius: 7px;
+  border-radius: 6px;
   color: var(--muted);
   cursor: pointer;
 }
@@ -366,7 +377,7 @@
 }
 
 .sb-row-action.danger:hover {
-  color: var(--danger, #f06b7b);
+  color: var(--danger);
 }
 
 .sb-popover {
@@ -390,8 +401,8 @@
 
 .sb-row.confirm {
   gap: 4px;
-  padding: 3px 4px 3px 10px;
-  font-size: 12.5px;
+  padding: 3px 4px 3px 8px;
+  font-size: 13px;
   background: var(--hover);
 }
 
@@ -407,7 +418,7 @@
 .sb-text-btn {
   padding: 4px 8px;
   border-radius: 6px;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--muted-strong);
   cursor: pointer;
 }
@@ -422,8 +433,8 @@
 }
 
 .sb-empty {
-  margin: 6px 10px;
-  font-size: 12.5px;
+  margin: 4px 8px;
+  font-size: 13px;
   color: var(--faint);
 }
 
@@ -442,7 +453,7 @@
   align-items: center;
   gap: 4px;
   width: 100%;
-  margin-top: 6px;
+  margin-top: 4px;
   padding-top: 8px;
   border-top: 1px solid var(--line-strong);
 }
@@ -455,9 +466,9 @@
   display: flex;
   flex: 1;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
-  padding: 6px;
+  padding: 4px;
   border-radius: 10px;
   text-align: left;
   cursor: pointer;
@@ -497,7 +508,7 @@
    * at this size.
    */
   background:
-    radial-gradient(circle at 32% 26%, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0) 36%),
+    radial-gradient(circle at 32% 26%, color-mix(in srgb, var(--text) 50%, transparent), transparent 36%),
     radial-gradient(
       circle closest-side at 50% 50%,
       transparent 0 78%,
@@ -507,7 +518,7 @@
     radial-gradient(circle at 34% 28%, var(--av-from, var(--cyan)), var(--av-to, var(--avatar-bg)) 74%),
     radial-gradient(circle at 34% 28%, transparent 46%, color-mix(in srgb, #000 76%, var(--av-to, var(--avatar-bg))) 98%);
   box-shadow:
-    0 2px 6px rgba(0, 0, 0, 0.4),
+    0 2px 6px var(--shadow-color),
     0 0 0 1px color-mix(in srgb, var(--av-rim, var(--cyan)) 38%, transparent);
 }
 
@@ -753,7 +764,7 @@
 }
 
 .sb-user-text b {
-  font-size: 13.5px;
+  font-size: 13px;
   font-weight: 600;
 }
 
@@ -768,14 +779,14 @@
    reading all eleven to find either. Grouped, most of the list can be skipped at a glance. The groups come from
    the capability registry, so the window and the browser's Command Centre file things the same way. */
 .sb-menu-group + .sb-menu-group {
-  margin-top: 6px;
-  padding-top: 6px;
+  margin-top: 4px;
+  padding-top: 4px;
   border-top: 1px solid var(--line);
 }
 
 .sb-menu-head {
-  margin: 2px 0 2px 10px;
-  font-size: 9.5px;
+  margin: 2px 0 2px 8px;
+  font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.1em;
   text-transform: uppercase;

@@ -5,23 +5,22 @@
 .setting.transfer {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
 }
 
 .transfer-half {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 14px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 10px;
   background: var(--panel);
 }
 
 .transfer-half h4 {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   margin: 0;
   font-size: 13px;
   letter-spacing: 0.02em;
@@ -31,9 +30,9 @@
 .transfer-half h5 {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   margin: 0 0 4px;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--muted-strong);
 }
 
@@ -46,10 +45,9 @@
 .transfer-category {
   display: flex;
   align-items: flex-start;
-  gap: 9px;
-  padding: 9px 11px;
-  border: 1px solid var(--line);
-  border-radius: 9px;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 10px;
   background: var(--pill-bg);
   cursor: pointer;
 }
@@ -70,13 +68,13 @@
 }
 
 .transfer-category strong {
-  font-size: 12.5px;
+  font-size: 13px;
   color: var(--text);
 }
 
 .transfer-category em {
   font-style: normal;
-  font-size: 11.5px;
+  font-size: 11px;
   line-height: 1.45;
   color: var(--muted);
 }
@@ -89,9 +87,8 @@
 }
 
 .transfer-excluded {
-  padding: 10px 12px;
-  border: 1px solid var(--line);
-  border-radius: 9px;
+  padding: 8px 12px;
+  border-radius: 10px;
   background: var(--pill-bg);
 }
 
@@ -106,7 +103,7 @@
 
 .transfer-excluded li,
 .transfer-note-list li {
-  font-size: 11.5px;
+  font-size: 11px;
   line-height: 1.5;
   color: var(--muted);
 }
@@ -118,14 +115,14 @@
 .transfer-password {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 10px;
+  gap: 8px;
 }
 
 .transfer-password label,
 .transfer-single {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 4px;
 }
 
 .transfer-password span,
@@ -138,9 +135,9 @@
 
 .transfer-password input,
 .transfer-single input {
-  padding: 7px 10px;
+  padding: 8px 8px;
   border: 1px solid var(--line-strong);
-  border-radius: 8px;
+  border-radius: 6px;
   background: var(--pill-bg);
   color: var(--text);
   font: inherit;
@@ -162,7 +159,7 @@
 .transfer-note,
 .transfer-progress {
   margin: 0;
-  font-size: 11.5px;
+  font-size: 11px;
   line-height: 1.55;
   color: var(--muted);
 }
@@ -170,9 +167,9 @@
 .transfer-problem {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   margin: 0;
-  font-size: 11.5px;
+  font-size: 11px;
   line-height: 1.55;
   color: var(--red);
 }
@@ -181,22 +178,22 @@
 .transfer-done {
   display: flex;
   align-items: flex-start;
-  gap: 9px;
-  padding: 11px 13px;
+  gap: 8px;
+  padding: 12px 12px;
   border-radius: 10px;
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.55;
 }
 
 .transfer-alert {
   border: 1px solid var(--amber);
-  background: rgba(255, 176, 32, 0.08);
+  background: color-mix(in srgb, var(--amber) 8%, transparent);
   color: var(--text);
 }
 
 .transfer-done {
   border: 1px solid var(--green);
-  background: rgba(46, 204, 113, 0.08);
+  background: color-mix(in srgb, var(--green) 8%, transparent);
   color: var(--text);
 }
 
@@ -219,9 +216,9 @@
   flex-direction: column;
   align-items: center;
   gap: 8px;
-  padding: 22px 14px;
+  padding: 20px 12px;
   border: 1px dashed var(--line-strong);
-  border-radius: 11px;
+  border-radius: 10px;
   background: var(--pill-bg);
   color: var(--muted);
   text-align: center;
@@ -234,22 +231,21 @@
 
 .transfer-drop p {
   margin: 0;
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .transfer-inspection {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   padding: 12px;
-  border: 1px solid var(--line);
   border-radius: 10px;
   background: var(--pill-bg);
 }
 
 .transfer-inspection > p {
   margin: 0;
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.55;
   color: var(--muted);
 }
@@ -263,7 +259,7 @@
 .transfer-mode label {
   display: flex;
   align-items: flex-start;
-  gap: 9px;
+  gap: 8px;
   cursor: pointer;
 }
 
@@ -280,13 +276,13 @@
 }
 
 .transfer-mode strong {
-  font-size: 12.5px;
+  font-size: 13px;
   color: var(--text);
 }
 
 .transfer-mode em {
   font-style: normal;
-  font-size: 11.5px;
+  font-size: 11px;
   line-height: 1.45;
   color: var(--muted);
 }

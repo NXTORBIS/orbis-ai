@@ -8,10 +8,10 @@
 .sched-body {
   flex: 1;
   overflow-y: auto;
-  padding: 14px 18px 24px;
+  padding: 12px 16px 24px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
 }
 
 /* Said at the top, not in small print: nothing runs with this computer off. */
@@ -20,25 +20,24 @@
   align-items: flex-start;
   gap: 8px;
   margin: 0;
-  padding: 10px 12px;
-  border: 1px solid var(--glass-border);
+  padding: 8px 12px;
   border-radius: 10px;
-  background: color-mix(in srgb, var(--cyan) 6%, transparent);
+  background: var(--panel);
   color: var(--faint);
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.5;
 }
 
 .sched-truth svg {
   flex: none;
   margin-top: 2px;
-  color: var(--cyan);
+  color: var(--faint);
 }
 
 .sched-limits {
   border: 1px solid var(--glass-border);
   border-radius: 10px;
-  padding: 12px 14px;
+  padding: 12px 12px;
 }
 
 .sched-limits h3 {
@@ -52,14 +51,14 @@
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
 .sched-limits li {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.5;
 }
 
@@ -72,7 +71,7 @@
 }
 
 .sched-limits em {
-  color: var(--cyan);
+  color: var(--text);
   font-style: normal;
 }
 
@@ -81,7 +80,7 @@
 .sched-make {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
 .sched-say {
@@ -89,7 +88,6 @@
   align-items: center;
   gap: 8px;
   padding: 0 12px;
-  border: 1px solid var(--glass-border);
   border-radius: 10px;
   background: var(--pill-bg, transparent);
 }
@@ -105,30 +103,30 @@
   background: none;
   color: var(--text);
   font: inherit;
-  padding: 11px 0;
+  padding: 12px 0;
   outline: none;
 }
 
 .sched-examples {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 4px;
 }
 
 /* What Orbis understood, shown back before anything is kept. */
 .sched-read {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 12px 14px;
-  border: 1px solid color-mix(in srgb, var(--cyan) 40%, var(--glass-border));
+  gap: 4px;
+  padding: 12px 12px;
+  border: 1px solid var(--glass-border);
   border-radius: 10px;
 }
 
 .sched-read-said {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   margin: 0;
   font-size: 13px;
   font-weight: 600;
@@ -146,17 +144,17 @@
 .sched-warn {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   margin: 0;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--faint);
 }
 
 .sched-refused {
-  padding: 10px 14px;
+  padding: 8px 12px;
   border: 1px solid color-mix(in srgb, var(--red) 35%, var(--glass-border));
   border-radius: 10px;
-  font-size: 12.5px;
+  font-size: 13px;
   line-height: 1.5;
 }
 
@@ -184,7 +182,7 @@
   grid-template-columns: 1fr auto;
   align-items: center;
   gap: 8px;
-  padding: 10px 12px;
+  padding: 8px 12px;
   border: 1px solid var(--glass-border);
   border-radius: 10px;
   /* The state reads as a colour down the left edge, which is quicker than reading every row. */
@@ -227,14 +225,14 @@
 
 .sched-rule,
 .sched-state {
-  font-size: 11.5px;
+  font-size: 11px;
   color: var(--faint);
 }
 
 .sched-state {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
 }
 
 .sched-problem .sched-state {
@@ -254,11 +252,23 @@
   opacity: 1;
 }
 
+@media (hover: none) {
+  .sched-tools {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sched-tools {
+    transition: none;
+  }
+}
+
 .sched-detail {
   grid-column: 1 / -1;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
   padding-top: 8px;
   margin-top: 4px;
   border-top: 1px solid var(--glass-border);
@@ -266,7 +276,7 @@
 
 .sched-detail p {
   margin: 0;
-  font-size: 11.5px;
+  font-size: 11px;
 }
 
 .sched-history {
@@ -276,14 +286,14 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
-  font-size: 11.5px;
+  font-size: 11px;
   color: var(--faint);
 }
 
 .sched-history li {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
 }
 
 .sched-dot {
@@ -308,7 +318,7 @@
 }
 
 .sched-stopped summary {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--faint);
   cursor: pointer;
 }
@@ -326,10 +336,10 @@
 .sched-power {
   border: 1px solid var(--glass-border);
   border-radius: 10px;
-  padding: 12px 14px;
+  padding: 12px 12px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
 .sched-power h3 {
@@ -347,15 +357,15 @@
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
 .sched-power li {
   display: grid;
   grid-template-columns: auto 1fr;
-  gap: 9px;
+  gap: 8px;
   align-items: start;
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.5;
 }
 
@@ -377,14 +387,14 @@
 /* What to do about it, when anything can be done. */
 .sched-power em {
   font-style: normal;
-  color: var(--cyan);
+  color: var(--text);
 }
 
 .sched-stand-dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  margin-top: 5px;
+  margin-top: 4px;
   background: var(--faint);
 }
 
@@ -408,14 +418,14 @@
 .sched-power-do {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   flex-wrap: wrap;
   padding-top: 8px;
   border-top: 1px solid var(--glass-border);
 }
 
 .sched-power-do span {
-  font-size: 11.5px;
+  font-size: 11px;
   flex: 1;
   min-width: 180px;
 }
@@ -425,7 +435,7 @@
 .sched-coming {
   border: 1px solid var(--glass-border);
   border-radius: 10px;
-  padding: 12px 14px;
+  padding: 12px 12px;
 }
 
 .sched-coming h3 {
@@ -443,7 +453,7 @@
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 4px;
   /* Long enough to be useful, short enough not to become the whole screen. */
   max-height: 260px;
   overflow-y: auto;
@@ -453,7 +463,7 @@
   display: flex;
   align-items: baseline;
   gap: 8px;
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .sched-coming-when {
@@ -476,8 +486,8 @@
 
 .sched-coming-tag {
   flex: none;
-  font-size: 10.5px;
-  padding: 1px 6px;
+  font-size: 10px;
+  padding: 1px 4px;
   border-radius: 999px;
   border: 1px solid var(--glass-border);
   color: var(--faint);
@@ -488,8 +498,8 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding-top: 10px;
-  margin-top: 6px;
+  padding-top: 8px;
+  margin-top: 4px;
   border-top: 1px solid var(--glass-border);
 }
 
@@ -497,17 +507,17 @@
   display: flex;
   flex-direction: column;
   gap: 3px;
-  font-size: 11.5px;
+  font-size: 11px;
 }
 
 .sched-edit input {
   border: 1px solid var(--glass-border);
-  border-radius: 8px;
+  border-radius: 6px;
   background: none;
   color: var(--text);
   font: inherit;
-  font-size: 12.5px;
-  padding: 7px 10px;
+  font-size: 13px;
+  padding: 8px 8px;
   outline: none;
 }
 
@@ -518,9 +528,9 @@
 .sched-edit-row {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   flex-wrap: wrap;
-  font-size: 11.5px;
+  font-size: 11px;
 }
 
 .sched-edit-row > span:first-child {

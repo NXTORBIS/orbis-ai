@@ -15,7 +15,7 @@
 
 .code-page-ask {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   align-items: center;
 }
 
@@ -28,9 +28,8 @@
   align-items: flex-start;
   gap: 8px;
   margin: 0;
-  padding: 10px 12px;
+  padding: 8px 12px;
   border-radius: 10px;
-  border: 1px solid var(--line-strong);
   background: var(--pill-bg);
   color: var(--muted-strong);
   font-size: 13px;
@@ -43,7 +42,7 @@
 }
 
 .code-page-failure {
-  padding: 12px 14px;
+  padding: 12px 12px;
   border-radius: 10px;
   border: 1px solid var(--red);
   background: color-mix(in srgb, var(--red) 12%, transparent);
@@ -51,14 +50,14 @@
 }
 
 .code-page-failure p {
-  margin: 0 0 6px;
+  margin: 0 0 4px;
 }
 
 .code-page-failure ul,
 .code-page-notes,
 .code-page-warnings {
   margin: 0;
-  padding-left: 18px;
+  padding-left: 16px;
   font-size: 13px;
   color: var(--muted-strong);
 }
@@ -71,7 +70,7 @@
 
 .code-page-purpose {
   margin: 0;
-  font-size: 14px;
+  font-size: 13px;
 }
 
 /* A caveat on a Page that works, which is different from a reason it does not. */
@@ -98,8 +97,7 @@
 
 .code-page-region {
   flex: 1;
-  border-radius: 12px;
-  border: 1px solid var(--line);
+  border-radius: 10px;
   background: var(--bg-mid);
   overflow: hidden;
 }
@@ -111,18 +109,17 @@
 .notify-cats {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 10px;
+  gap: 8px;
   margin-top: 12px;
 }
 
 .notify-cat {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   align-items: flex-start;
-  padding: 10px 12px;
+  padding: 8px 12px;
   background: var(--glass);
-  border: 1px solid var(--glass-border);
-  border-radius: 12px;
+  border-radius: 10px;
   cursor: pointer;
 }
 
@@ -146,7 +143,7 @@
 
 .notify-cat small,
 .notify-item small {
-  font-size: 11.5px;
+  font-size: 11px;
   line-height: 1.4;
   color: var(--faint);
 }
@@ -160,13 +157,13 @@
 }
 
 .notify-quiet input[type='time'] {
-  padding: 5px 8px;
+  padding: 4px 8px;
   font: inherit;
   font-size: 13px;
   color: var(--text);
   background: var(--glass);
   border: 1px solid var(--glass-border);
-  border-radius: 8px;
+  border-radius: 6px;
 }
 
 .notify-quiet input[type='time']:disabled {
@@ -178,13 +175,13 @@
 }
 
 .notify-said {
-  margin-top: 6px;
-  font-size: 12px;
-  color: var(--cyan);
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--text);
 }
 
 .notify-none {
-  margin: 10px 0 0;
+  margin: 8px 0 0;
   font-size: 13px;
   color: var(--faint);
 }
@@ -192,13 +189,13 @@
 .notify-tools {
   display: flex;
   gap: 8px;
-  margin: 10px 0 6px;
+  margin: 8px 0 4px;
 }
 
 .notify-list {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -208,10 +205,9 @@
   display: flex;
   gap: 12px;
   align-items: center;
-  padding: 10px 12px;
+  padding: 8px 12px;
   background: var(--glass);
-  border: 1px solid var(--glass-border);
-  border-radius: 12px;
+  border-radius: 10px;
 }
 
 /* A line down the side rather than a dot: it survives being read at a glance and in high contrast. */
@@ -233,7 +229,7 @@
 }
 
 .notify-text span {
-  font-size: 12.5px;
+  font-size: 13px;
   color: var(--muted);
   overflow-wrap: anywhere;
 }
@@ -241,7 +237,7 @@
 .notify-acts {
   display: flex;
   flex: none;
-  gap: 6px;
+  gap: 4px;
   align-items: center;
 }
 
@@ -258,20 +254,20 @@
 /* ---------------------------------------------------------------- answers this conversation moved away from */
 /* Quiet on purpose: nothing shows until an answer has actually been replaced. See src/shared/conversationBranch.ts. */
 .others {
-  margin: 0 auto 6px;
+  margin: 0 auto 4px;
   width: min(100%, 760px);
   padding: 0 12px;
 }
 .others-toggle {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 9px;
+  gap: 4px;
+  padding: 4px 8px;
   border: 1px solid var(--line);
   border-radius: 999px;
   background: transparent;
   color: var(--faint);
-  font-size: 12px;
+  font-size: 13px;
   cursor: pointer;
 }
 .others-toggle:hover,
@@ -281,9 +277,8 @@
 }
 .others-list {
   list-style: none;
-  margin: 6px 0 0;
-  padding: 6px;
-  border: 1px solid var(--line);
+  margin: 4px 0 0;
+  padding: 4px;
   border-radius: 10px;
   background: var(--panel);
   display: flex;
@@ -294,8 +289,8 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 4px 6px;
-  border-radius: 7px;
+  padding: 4px 4px;
+  border-radius: 6px;
 }
 .others-row:hover {
   background: var(--bg-hover);

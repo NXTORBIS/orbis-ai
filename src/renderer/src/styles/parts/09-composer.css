@@ -10,7 +10,7 @@
  */
 /* Set on the stage rather than :root: the palette is generated, and this hand-written sheet keeps no :root block. */
 .stage-content {
-  --chat-line-max: 950px;
+  --chat-line-max: 720px;
   /* The space outside that column on each side. The dock spends it as padding; the messages column does the same. */
   --chat-inset: 32px;
 }
@@ -41,11 +41,16 @@
   width: min(var(--chat-line-max), 100%);
   max-width: 95vw;
   border: 1px solid var(--composer-border);
-  border-radius: 50px;
+  border-radius: 999px;
   background: var(--composer-bg);
   backdrop-filter: blur(20px);
   transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15), 0 0 20px var(--composer-glow), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  /* A third of the full shadow strength: a cast shadow in the light theme is a much softer one, not a darker one,
+     and a deep black under the box you type in is what makes a converted light theme look muddy. */
+  box-shadow:
+    0 8px 32px color-mix(in srgb, var(--shadow-color) 33%, transparent),
+    0 0 20px var(--composer-glow),
+    inset 0 1px 0 var(--rim-light);
   padding: 0;
 }
 
@@ -60,7 +65,7 @@
   bottom: 100%;
   left: 16%;
   pointer-events: none;
-  background: linear-gradient(to top, rgba(63, 216, 255, 0.32), rgba(63, 216, 255, 0.08) 45%, transparent);
+  background: linear-gradient(to top, color-mix(in srgb, var(--cyan) 32%, transparent), color-mix(in srgb, var(--cyan) 8%, transparent) 45%, transparent);
   filter: blur(14px);
   transform-origin: bottom;
   animation: composer-trail 1.6s ease-out forwards;
@@ -87,10 +92,10 @@
 
 @keyframes composer-land {
   0% {
-    box-shadow: 0 0 0 0 rgba(63, 216, 255, 0.4);
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--cyan) 40%, transparent);
   }
   100% {
-    box-shadow: 0 0 0 18px rgba(63, 216, 255, 0);
+    box-shadow: 0 0 0 18px transparent;
   }
 }
 
@@ -117,14 +122,14 @@
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background: linear-gradient(105deg, transparent 35%, rgba(63, 216, 255, 0.06) 50%, transparent 65%);
+  background: linear-gradient(105deg, transparent 35%, color-mix(in srgb, var(--cyan) 6%, transparent) 50%, transparent 65%);
   background-size: 260% 100%;
   animation: composer-sheen 7s linear infinite;
   pointer-events: none;
 }
 
 .composer:focus-within {
-  border-color: rgba(63, 216, 255, 0.6);
+  border-color: color-mix(in srgb, var(--cyan) 60%, transparent);
 }
 
 /* Pulsing glow while a reply is streaming. */
@@ -138,7 +143,7 @@
   flex: 1;
   min-height: 40px;
   max-height: 200px;
-  padding: 10px 16px;
+  padding: 8px 16px;
   border: 0;
   outline: none;
   resize: none;
@@ -171,7 +176,7 @@
   inset: 0;
   z-index: 0;
   overflow: hidden;
-  padding: 10px 16px;
+  padding: 8px 16px;
   color: transparent;
   font-size: 15px;
   font-weight: 500;
@@ -188,11 +193,11 @@
 
 .composer-ghost kbd {
   margin-left: 8px;
-  padding: 1px 6px;
+  padding: 1px 4px;
   border: 1px solid var(--pill-border);
-  border-radius: 5px;
+  border-radius: 6px;
   font-family: var(--mono);
-  font-size: 10.5px;
+  font-size: 10px;
   color: var(--faint);
   vertical-align: 1px;
 }
@@ -201,16 +206,16 @@
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-top: 10px;
+  margin-top: 8px;
   animation: followups-in 0.35s ease-out;
 }
 
 .followup-chip {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   max-width: 100%;
-  padding: 7px 13px;
+  padding: 8px 12px;
   border: 1px solid var(--pill-border);
   border-radius: 999px;
   background: var(--pill-bg);
@@ -223,12 +228,12 @@
 
 .followup-chip svg {
   flex-shrink: 0;
-  color: var(--cyan);
+  color: var(--faint);
 }
 
 .followup-chip:hover {
-  border-color: var(--cyan-dim);
-  background: var(--cyan-fill);
+  border-color: var(--glass-border);
+  background: var(--pill-bg);
   color: var(--text);
   transform: translateY(-1px);
 }
@@ -280,22 +285,22 @@
 }
 
 .tool-btn:hover:not(:disabled) {
-  background: rgba(63, 216, 255, 0.08);
-  color: var(--cyan);
+  background: var(--hover);
+  color: var(--text);
 }
 
 .tool-btn:active:not(:disabled) {
-  background: rgba(63, 216, 255, 0.12);
+  background: var(--hover);
 }
 
 .tool-btn.recording {
-  background: rgba(255, 77, 109, 0.12);
+  background: color-mix(in srgb, var(--red) 12%, transparent);
   color: var(--red);
   animation: pulse-red 1.5s ease-in-out infinite;
 }
 
 .tool-btn.transcribing {
-  background: rgba(63, 216, 255, 0.12);
+  background: color-mix(in srgb, var(--cyan) 12%, transparent);
   color: var(--cyan);
   animation: pulse-cyan 1.5s ease-in-out infinite;
 }
@@ -321,7 +326,7 @@
 .tool-divider {
   width: 1px;
   height: 18px;
-  margin: 0 6px;
+  margin: 0 4px;
   background: var(--glass-border);
 }
 
@@ -333,7 +338,7 @@
   right: 0;
   margin-bottom: 8px;
   border: 1px solid var(--glass-border);
-  border-radius: 12px;
+  border-radius: 10px;
   /* Solid, like the other menus, so the greeting behind it never shows through. */
   background: var(--popover-bg);
   box-shadow: var(--glass-shadow);
@@ -359,16 +364,16 @@
 }
 
 .slash-command:first-child {
-  border-radius: 11px 11px 0 0;
+  border-radius: 10px 10px 0 0;
 }
 
 .slash-command:last-child {
-  border-radius: 0 0 11px 11px;
+  border-radius: 0 0 10px 10px;
 }
 
 .slash-command:hover,
 .slash-command.selected {
-  background: rgba(63, 216, 255, 0.1);
+  background: color-mix(in srgb, var(--cyan) 10%, transparent);
 }
 
 .cmd-args {
@@ -385,11 +390,11 @@
 .cmd-name {
   font-weight: 600;
   font-size: 13px;
-  color: var(--cyan);
+  color: var(--text);
 }
 
 .cmd-desc {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--muted);
 }
 
@@ -440,14 +445,14 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
+  gap: 4px;
   height: 32px;
-  padding: 0 14px;
-  border: 1px solid rgba(63, 216, 255, 0.25);
+  padding: 0 12px;
+  border: 1px solid var(--glass-border);
   border-radius: 999px;
-  background: rgba(63, 216, 255, 0.06);
+  background: var(--pill-bg);
   color: var(--muted-strong);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   cursor: pointer;
@@ -456,10 +461,8 @@
 }
 
 .mode-pill-subtle:hover {
-  background: rgba(63, 216, 255, 0.12);
-  border-color: rgba(63, 216, 255, 0.4);
-  color: var(--cyan);
-  box-shadow: 0 0 12px rgba(63, 216, 255, 0.15);
+  background: var(--hover);
+  color: var(--text);
 }
 
 .mode-pill-subtle:active {
@@ -472,10 +475,6 @@
   flex-shrink: 0;
 }
 
-.mode-pill-subtle:hover svg {
-  color: var(--cyan);
-}
-
 .model-label {
   display: inline-block;
   max-width: 120px;
@@ -486,12 +485,12 @@
 .mode-pill {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   height: 36px;
   padding: 0 12px;
   border: none;
-  border-radius: 8px;
-  background: rgba(63, 216, 255, 0.08);
+  border-radius: 6px;
+  background: var(--pill-bg);
   color: var(--muted);
   font-size: 13px;
   font-weight: 500;
@@ -513,12 +512,8 @@
 }
 
 .mode-pill:hover {
-  background: rgba(63, 216, 255, 0.12);
-  color: var(--cyan);
-}
-
-.mode-pill:hover svg {
-  color: var(--cyan);
+  background: var(--hover);
+  color: var(--text);
 }
 
 .mode-pill:active {
@@ -533,20 +528,24 @@
   margin-right: 4px;
   border-radius: 50%;
   background: var(--cyan);
-  color: #0a1428;
+  /* The arrow is drawn on top of the accent, so it is the one colour that has to flip with the theme: a near-black
+     navy reads on the bright cyan of the dark theme and disappears into the deep blue of the light one. */
+  color: var(--on-accent);
   border: none;
   cursor: pointer;
-  box-shadow: 0 2px 8px rgba(63, 216, 255, 0.25);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--cyan) 25%, transparent);
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .send-btn:hover:not(:disabled) {
-  background: #2dccff;
-  box-shadow: 0 4px 12px rgba(63, 216, 255, 0.4);
+  /* Hover and press are "more of the accent", which is a brighter cyan on dark and a deeper blue on light -- the two
+     themes want opposite directions, so each is its own token rather than a mix of one. */
+  background: var(--accent-strong);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--cyan) 40%, transparent);
 }
 
 .send-btn:active:not(:disabled) {
-  background: #1fb8ff;
+  background: var(--accent-press);
 }
 
 .send-btn:disabled {
@@ -576,14 +575,14 @@
 }
 
 .send-btn.speak:hover:not(:disabled) {
-  background: rgba(63, 216, 255, 0.08);
-  border-color: rgba(63, 216, 255, 0.35);
+  background: color-mix(in srgb, var(--cyan) 8%, transparent);
+  border-color: color-mix(in srgb, var(--cyan) 35%, transparent);
   color: var(--cyan);
   box-shadow: none;
 }
 
 .send-btn.speak:active:not(:disabled) {
-  background: rgba(63, 216, 255, 0.14);
+  background: color-mix(in srgb, var(--cyan) 14%, transparent);
 }
 
 .send-btn.speak:disabled {
@@ -595,20 +594,20 @@
 .send-btn.speak.recording {
   background: var(--red);
   border-color: var(--red);
-  color: #ffffff;
+  color: var(--text);
   animation: stop-pulse 1.4s ease-out infinite;
 }
 
 .send-btn.speak.transcribing {
-  background: rgba(63, 216, 255, 0.14);
-  border-color: rgba(63, 216, 255, 0.4);
+  background: color-mix(in srgb, var(--cyan) 14%, transparent);
+  border-color: color-mix(in srgb, var(--cyan) 40%, transparent);
   color: var(--cyan);
   animation: send-pulse 1.6s ease-out infinite;
 }
 
 .send-btn.stop {
   background: var(--red);
-  color: #ffffff;
+  color: var(--text);
   animation: stop-pulse 1.4s ease-out infinite;
 }
 
@@ -621,7 +620,7 @@
 }
 
 .send-btn.queue:hover:not(:disabled) {
-  background: rgba(63, 216, 255, 0.24);
+  background: color-mix(in srgb, var(--cyan) 24%, transparent);
   box-shadow: none;
 }
 
@@ -632,9 +631,8 @@
   gap: 2px;
   width: min(var(--chat-line-max), 100%);
   max-width: 95vw;
-  padding: 8px 10px;
-  border: 1px solid var(--pill-border);
-  border-radius: 16px;
+  padding: 8px 8px;
+  border-radius: 10px;
   background: var(--popover-bg);
   box-shadow: var(--glass-shadow);
   animation: queue-in 0.2s ease-out;
@@ -645,7 +643,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 0 2px 4px 6px;
+  padding: 0 2px 4px 4px;
 }
 
 .queue-head .hud-label.paused {
@@ -660,11 +658,11 @@
 .queue-btn {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 3px 11px;
+  gap: 4px;
+  padding: 3px 12px;
   border: 1px solid var(--pill-border);
   border-radius: 999px;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--muted-strong);
   cursor: pointer;
 }
@@ -693,9 +691,9 @@
 .queue-item {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   min-height: 34px;
-  padding: 2px 4px 2px 6px;
+  padding: 2px 4px 2px 4px;
   border-radius: 10px;
 }
 
@@ -712,7 +710,7 @@
   border-radius: 50%;
   background: var(--pill-bg-strong);
   font-family: var(--mono);
-  font-size: 10.5px;
+  font-size: 10px;
   color: var(--muted);
 }
 
@@ -798,12 +796,12 @@
   max-height: 240px;
   overflow-y: auto;
   margin-top: 4px;
-  padding-top: 6px;
+  padding-top: 4px;
   border-top: 1px solid var(--glass-border);
 }
 
 .disclaimer {
-  margin: 7px 0 0;
+  margin: 8px 0 0;
   text-align: center;
   font-size: 11px;
   color: var(--faint);
@@ -814,17 +812,17 @@
   flex-wrap: wrap;
   justify-content: center;
   gap: 8px;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 }
 
 .quick-prompt {
-  padding: 6px 12px;
+  padding: 4px 12px;
   border-radius: 999px;
-  font-size: 12.5px;
+  font-size: 13px;
 }
 
 .quick-prompt:hover {
-  border-color: var(--cyan-dim);
+  border-color: var(--glass-border);
 }
 
 .plus-btn {
@@ -843,7 +841,7 @@
   bottom: calc(100% + 8px);
   left: 0;
   min-width: 180px;
-  border-radius: 12px;
+  border-radius: 10px;
 }
 
 .attach-menu.down {
@@ -853,28 +851,28 @@
 .attachment-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 4px;
   margin: 0 12px 8px;
 }
 
 .attachment-row.end {
   justify-content: flex-end;
-  margin: 6px 0 0;
+  margin: 4px 0 0;
 }
 
 .attachment-chip {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   max-width: 240px;
   padding: 4px 8px;
-  border-radius: 8px;
-  font-size: 12px;
+  border-radius: 6px;
+  font-size: 13px;
 }
 
 .attachment-chip svg {
   flex-shrink: 0;
-  color: var(--cyan);
+  color: var(--faint);
 }
 
 .attachment-chip button {

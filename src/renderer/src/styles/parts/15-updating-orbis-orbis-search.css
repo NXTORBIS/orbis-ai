@@ -3,13 +3,13 @@
 .up-state {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
 .up-line {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   margin: 0;
   font-size: 13px;
   color: var(--muted-strong);
@@ -35,29 +35,28 @@
 
 .up-required {
   margin: 0;
-  padding: 8px 10px;
-  border-radius: 9px;
+  padding: 8px 8px;
+  border-radius: 10px;
   border: 1px solid var(--danger-border);
   background: var(--danger-bg);
   color: var(--danger);
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .up-notes {
   display: flex;
   flex-direction: column;
-  gap: 5px;
-  padding: 10px 12px;
+  gap: 4px;
+  padding: 8px 12px;
   border-radius: 10px;
-  border: 1px solid var(--line-strong);
   background: var(--pill-bg);
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .up-notes pre {
   margin: 0;
   font-family: inherit;
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.55;
   white-space: pre-wrap;
   color: var(--muted-strong);

@@ -23,8 +23,17 @@ body,
   margin: 0;
 }
 
+/*
+ * The page itself, in the theme's own colours.
+ *
+ * The colour was never set here at all, so the body inherited the browser's default -- pure black -- and the only
+ * reason the window was readable was that every box inside it set a colour of its own. Anything that did not, and
+ * anything drawn before the window mounts, was black text on black. In the light theme it was black text on a light
+ * page, which is nearly right by luck and wrong by construction.
+ */
 body {
-  background: var(--bg-edge);
+  background: var(--bg);
+  color: var(--text);
   -webkit-font-smoothing: antialiased;
   overflow: hidden;
 }
@@ -56,7 +65,7 @@ select {
 }
 
 ::selection {
-  background: rgba(63, 216, 255, 0.3);
+  background: color-mix(in srgb, var(--cyan) 30%, transparent);
 }
 
 .truncate {
@@ -87,7 +96,7 @@ select {
 
 .hud-label {
   font-family: var(--mono);
-  font-size: 10.5px;
+  font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -115,7 +124,7 @@ select {
   overflow: hidden;
   color: var(--text);
   font-family: var(--font);
-  font-size: 14px;
+  font-size: 13px;
 }
 
 /*
@@ -192,7 +201,10 @@ select {
 }
 
 [data-backdrop='aurora'] .hud-bg::after {
-  background: radial-gradient(45% 30% at 75% 30%, rgba(140, 150, 255, 0.2) 0%, transparent 70%);
+  /* The second field is a different hue from the first on purpose -- that is what keeps the two from reading as one
+     moving blob. It is the themed violet rather than a fixed periwinkle, so on a light page it is a violet wash
+     rather than a pale band nobody can see. */
+  background: radial-gradient(45% 30% at 75% 30%, color-mix(in srgb, var(--violet) 20%, transparent) 0%, transparent 70%);
   animation: backdrop-aurora-b calc(var(--backdrop-cycle, 40s) * 1.6) ease-in-out infinite alternate;
 }
 
@@ -224,14 +236,18 @@ select {
  * No element per star. A hundred divs would be a hundred things to composite; this is one layer whose position
  * changes, which costs the same whether it shows ten points or ten thousand.
  */
+/*
+ * The points are drawn in --star rather than in white. A white star on a near-white page is not a faint star, it is
+ * nothing at all, and this backdrop simply did not exist in the light theme.
+ */
 [data-backdrop='stars'] .hud-bg::before {
   background-image:
-    radial-gradient(1px 1px at 20% 30%, rgba(255, 255, 255, 0.85) 0%, transparent 100%),
-    radial-gradient(1px 1px at 70% 15%, rgba(255, 255, 255, 0.6) 0%, transparent 100%),
-    radial-gradient(1.5px 1.5px at 45% 70%, rgba(255, 255, 255, 0.75) 0%, transparent 100%),
-    radial-gradient(1px 1px at 85% 60%, rgba(255, 255, 255, 0.5) 0%, transparent 100%),
-    radial-gradient(1px 1px at 10% 85%, rgba(255, 255, 255, 0.7) 0%, transparent 100%),
-    radial-gradient(1px 1px at 60% 90%, rgba(255, 255, 255, 0.45) 0%, transparent 100%);
+    radial-gradient(1px 1px at 20% 30%, color-mix(in srgb, var(--star) 85%, transparent) 0%, transparent 100%),
+    radial-gradient(1px 1px at 70% 15%, color-mix(in srgb, var(--star) 60%, transparent) 0%, transparent 100%),
+    radial-gradient(1.5px 1.5px at 45% 70%, color-mix(in srgb, var(--star) 75%, transparent) 0%, transparent 100%),
+    radial-gradient(1px 1px at 85% 60%, color-mix(in srgb, var(--star) 50%, transparent) 0%, transparent 100%),
+    radial-gradient(1px 1px at 10% 85%, color-mix(in srgb, var(--star) 70%, transparent) 0%, transparent 100%),
+    radial-gradient(1px 1px at 60% 90%, color-mix(in srgb, var(--star) 45%, transparent) 0%, transparent 100%);
   background-size: 260px 260px;
   background-repeat: repeat;
   animation: backdrop-stars calc(var(--backdrop-cycle, 40s) * 5) linear infinite;
@@ -240,8 +256,8 @@ select {
 /* A second, larger field moving slower: the near stars pass the far ones, which is what reads as depth. */
 [data-backdrop='stars'] .hud-bg::after {
   background-image:
-    radial-gradient(1.5px 1.5px at 35% 25%, rgba(255, 255, 255, 0.55) 0%, transparent 100%),
-    radial-gradient(2px 2px at 80% 75%, rgba(200, 215, 255, 0.4) 0%, transparent 100%);
+    radial-gradient(1.5px 1.5px at 35% 25%, color-mix(in srgb, var(--star) 55%, transparent) 0%, transparent 100%),
+    radial-gradient(2px 2px at 80% 75%, color-mix(in srgb, var(--star) 40%, transparent) 0%, transparent 100%);
   background-size: 520px 520px;
   background-repeat: repeat;
   animation: backdrop-stars calc(var(--backdrop-cycle, 40s) * 11) linear infinite reverse;
@@ -308,7 +324,7 @@ select {
     0deg,
     transparent 0,
     transparent 2px,
-    rgba(255, 255, 255, 0.022) 3px,
+    color-mix(in srgb, var(--text) 2.2%, transparent) 3px,
     transparent 4px
   );
   opacity: 0.8;

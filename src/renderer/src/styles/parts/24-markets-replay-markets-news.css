@@ -3,7 +3,7 @@
 .mk-replay {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   min-height: 0;
   overflow-y: auto;
   padding: 4px 4px 12px;
@@ -15,9 +15,8 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  padding: 9px 12px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
+  padding: 8px 12px;
+  border-radius: 10px;
   background: var(--rail-bg);
 }
 
@@ -26,11 +25,11 @@
   height: 28px;
   padding: 0 8px;
   border: 1px solid var(--line-strong);
-  border-radius: 8px;
+  border-radius: 6px;
   background: var(--pill-bg);
   color: var(--text);
   font: inherit;
-  font-size: 11.5px;
+  font-size: 11px;
 }
 
 /* The scrub bar takes the rest of the row: it is the control somebody reaches for most. */
@@ -52,7 +51,7 @@
   border-radius: 10px;
   background: var(--pill-bg);
   color: var(--muted);
-  font-size: 11.5px;
+  font-size: 11px;
   font-variant-numeric: tabular-nums;
 }
 
@@ -62,8 +61,8 @@
 
 /* Amber, because it is about to be true rather than true: the fill is at a price not yet revealed. */
 .mk-replay-position.is-pending {
-  border-color: rgba(255, 190, 77, 0.3);
-  background: rgba(255, 190, 77, 0.09);
+  border-color: color-mix(in srgb, var(--amber) 30%, transparent);
+  background: color-mix(in srgb, var(--amber) 9%, transparent);
   color: var(--amber);
 }
 
@@ -83,7 +82,7 @@
 .mk-news {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   min-height: 0;
   overflow-y: auto;
   padding: 4px 4px 12px;
@@ -102,10 +101,10 @@
   display: flex;
   flex-direction: column;
   gap: 3px;
-  padding: 9px 12px;
+  padding: 8px 12px;
   border: 1px solid transparent;
   border-bottom-color: var(--line);
-  border-radius: 8px;
+  border-radius: 6px;
 }
 
 .mk-headlines li:hover {
@@ -116,7 +115,7 @@
 .mk-headlines a {
   display: inline-flex;
   align-items: baseline;
-  gap: 6px;
+  gap: 4px;
   color: var(--text);
   font-size: 13px;
   line-height: 1.45;
@@ -124,7 +123,7 @@
 }
 
 .mk-headlines a:hover {
-  color: var(--cyan);
+  color: var(--text);
 }
 
 .mk-headlines a svg {
@@ -151,19 +150,19 @@
 }
 
 .mk-news-assets button {
-  padding: 1px 7px;
+  padding: 1px 8px;
   border: 1px solid var(--line-strong);
   border-radius: 999px;
   background: var(--pill-bg);
   color: var(--muted);
   font: inherit;
-  font-size: 10.5px;
+  font-size: 10px;
   cursor: pointer;
 }
 
 .mk-news-assets button:hover {
-  border-color: var(--cyan-dim);
-  color: var(--cyan);
+  border-color: var(--glass-border);
+  color: var(--text);
 }
 
 /* ---------------------------------------------------------------- Markets: asset logos */
@@ -195,7 +194,6 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--line-strong);
   border-radius: 50%;
   background: var(--pill-bg);
   color: var(--muted);
@@ -227,20 +225,20 @@
 .mk-currency-button {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   height: 28px;
-  padding: 0 10px;
+  padding: 0 8px;
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-pill, 999px);
   background: var(--pill-bg);
   color: var(--text);
   font: inherit;
-  font-size: 12px;
+  font-size: 13px;
   cursor: pointer;
 }
 
 .mk-currency-button:hover {
-  border-color: var(--cyan-dim);
+  border-color: var(--glass-border);
 }
 
 .mk-currency-button b {
@@ -262,13 +260,9 @@
   max-width: 88vw;
   padding: 8px;
   border: 1px solid var(--glass-border);
-  border-radius: 14px;
+  border-radius: 10px;
   background: var(--glass);
   box-shadow: var(--glass-shadow);
-}
-
-.mk-currency-menu .mk-search {
-  margin-top: 0;
 }
 
 .mk-currency-list {
@@ -279,7 +273,7 @@
 
 .mk-currency-list h6 {
   margin: 8px 0 3px;
-  padding: 0 6px;
+  padding: 0 4px;
   color: var(--faint);
   font-size: 10px;
   font-weight: 600;
@@ -305,13 +299,13 @@
   gap: 8px;
   flex: 1 1 auto;
   min-width: 0;
-  padding: 5px 8px;
+  padding: 4px 8px;
   border: 0;
-  border-radius: 8px;
+  border-radius: 6px;
   background: transparent;
   color: var(--text);
   font: inherit;
-  font-size: 12px;
+  font-size: 13px;
   text-align: left;
   cursor: pointer;
 }
@@ -340,7 +334,7 @@
 .mk-currency-foot {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
   margin-top: 8px;
   padding-top: 8px;
   border-top: 1px solid var(--line);

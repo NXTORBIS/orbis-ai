@@ -18,28 +18,28 @@
 .mk-panel-head {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
 .mk-panel-head h3 {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   margin: 0;
-  font-size: 13.5px;
+  font-size: 13px;
   font-weight: 600;
   letter-spacing: 0.01em;
 }
 
 .mk-panel-sub {
   color: var(--faint);
-  font-size: 11.5px;
+  font-size: 11px;
 }
 
 .mk-panel h4 {
-  margin: 10px 0 2px;
-  font-size: 11.5px;
+  margin: 8px 0 2px;
+  font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -48,7 +48,7 @@
 
 .mk-panel h5 {
   margin: 8px 0 2px;
-  font-size: 11.5px;
+  font-size: 11px;
   font-weight: 600;
   color: var(--muted-strong);
 }
@@ -56,13 +56,13 @@
 .mk-mini {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 4px 9px;
+  gap: 4px;
+  padding: 4px 8px;
   border: 1px solid var(--line);
   border-radius: 6px;
   background: transparent;
   color: var(--muted-strong);
-  font-size: 11.5px;
+  font-size: 11px;
   cursor: pointer;
 }
 
@@ -83,7 +83,7 @@
 .mk-link {
   border: 0;
   background: transparent;
-  padding: 0 0 0 6px;
+  padding: 0 0 0 4px;
   color: var(--cyan);
   font-size: inherit;
   cursor: pointer;
@@ -96,11 +96,11 @@
   align-items: flex-start;
   gap: 8px;
   margin: 0;
-  padding: 9px 11px;
+  padding: 8px 12px;
   border: 1px solid var(--line);
-  border-radius: 7px;
+  border-radius: 6px;
   color: var(--muted);
-  font-size: 11.5px;
+  font-size: 11px;
   line-height: 1.5;
 }
 
@@ -120,7 +120,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--muted);
 }
 
@@ -133,13 +133,13 @@
 .mk-field select {
   flex: 1 1 auto;
   min-width: 0;
-  padding: 5px 8px;
+  padding: 4px 8px;
   border: 1px solid var(--line);
   border-radius: 6px;
-  background: rgba(0, 0, 0, 0.25);
+  background: var(--rail-bg);
   color: var(--text);
   font: inherit;
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .mk-field input[type="range"] {
@@ -158,7 +158,7 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--muted-strong);
   cursor: pointer;
 }
@@ -178,8 +178,8 @@
 .mk-setting {
   display: flex;
   flex-direction: column;
-  gap: 5px;
-  padding: 9px 0;
+  gap: 4px;
+  padding: 8px 0;
   border-bottom: 1px solid var(--line);
 }
 
@@ -190,8 +190,8 @@
 .mk-setting-label {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  font-size: 12px;
+  gap: 4px;
+  font-size: 13px;
   color: var(--muted-strong);
 }
 
@@ -217,7 +217,7 @@
 
 .mk-panel legend {
   padding: 0 0 4px;
-  font-size: 11.5px;
+  font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -227,7 +227,7 @@
 .mk-chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 5px;
+  gap: 4px;
 }
 
 .mk-chip {
@@ -244,8 +244,8 @@
 }
 
 .mk-chip.mk-chip-on {
-  border-color: var(--cyan-dim);
-  background: var(--cyan-fill);
+  border-color: var(--glass-border);
+  background: var(--pill-bg);
   color: var(--text);
 }
 
@@ -271,12 +271,12 @@
 .mk-pattern-list {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
 }
 
 .mk-pattern-row {
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 6px;
   overflow: hidden;
 }
 
@@ -287,9 +287,9 @@
 .mk-pattern-head {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 8px;
   width: 100%;
-  padding: 8px 10px;
+  padding: 8px 8px;
   border: 0;
   background: transparent;
   color: var(--text);
@@ -299,7 +299,7 @@
 }
 
 .mk-pattern-head:hover {
-  background: rgba(255, 255, 255, 0.03);
+  background: color-mix(in srgb, var(--text) 3%, transparent);
 }
 
 .mk-pattern-caret {
@@ -319,7 +319,7 @@
 }
 
 .mk-pattern-name {
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 600;
 }
 
@@ -352,17 +352,17 @@
 }
 
 .mk-pattern-tag {
-  padding: 1px 6px;
+  padding: 1px 4px;
   border: 1px solid var(--line);
   border-radius: 999px;
   color: var(--faint);
-  font-size: 10.5px;
+  font-size: 10px;
 }
 
 .mk-pattern-body {
   display: flex;
   flex-direction: column;
-  gap: 9px;
+  gap: 8px;
   padding: 4px 12px 12px;
   border-top: 1px solid var(--line);
 }
@@ -370,7 +370,7 @@
 .mk-pattern-describe {
   margin: 0;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.55;
   max-width: 68ch;
 }
@@ -388,7 +388,7 @@
 
 .mk-pattern-facts dt {
   color: var(--faint);
-  font-size: 10.5px;
+  font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
@@ -396,7 +396,7 @@
 .mk-pattern-facts dd {
   margin: 2px 0 0;
   color: var(--muted-strong);
-  font-size: 11.5px;
+  font-size: 11px;
   line-height: 1.5;
 }
 
@@ -410,9 +410,9 @@
 .mk-pattern-rules li {
   display: flex;
   align-items: flex-start;
-  gap: 6px;
+  gap: 4px;
   color: var(--muted);
-  font-size: 11.5px;
+  font-size: 11px;
   line-height: 1.5;
 }
 
@@ -437,16 +437,16 @@
 
 .mk-pattern-misses {
   border: 1px solid var(--line);
-  border-radius: 7px;
-  padding: 8px 11px;
+  border-radius: 6px;
+  padding: 8px 12px;
 }
 
 .mk-pattern-misses > summary {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   color: var(--muted);
-  font-size: 11.5px;
+  font-size: 11px;
   cursor: pointer;
 }
 
@@ -460,25 +460,25 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
 .mk-pattern-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
-  gap: 7px;
+  gap: 8px;
 }
 
 .mk-pattern-card {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 5px;
+  gap: 4px;
   width: 100%;
   height: 100%;
-  padding: 10px 11px;
+  padding: 8px 12px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 6px;
   background: transparent;
   color: var(--text);
   font: inherit;
@@ -488,7 +488,7 @@
 
 .mk-pattern-card:hover {
   border-color: var(--line-strong);
-  background: rgba(255, 255, 255, 0.03);
+  background: color-mix(in srgb, var(--text) 3%, transparent);
 }
 
 .mk-pattern-card .mk-pattern-describe {
@@ -507,13 +507,13 @@
 .mk-rule-list {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
 }
 
 .mk-rule {
   border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 8px 10px;
+  border-radius: 6px;
+  padding: 8px 8px;
 }
 
 .mk-rule.mk-rule-open {
@@ -523,7 +523,7 @@
 .mk-rule-head {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 8px;
 }
 
 .mk-rule-name {
@@ -534,7 +534,7 @@
   padding: 0;
   color: var(--text);
   font: inherit;
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 600;
   text-align: left;
   cursor: pointer;
@@ -554,15 +554,15 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
-  margin-top: 6px;
+  margin-top: 4px;
 }
 
 .mk-rule-problems li {
   display: flex;
   align-items: flex-start;
-  gap: 6px;
+  gap: 4px;
   color: var(--amber);
-  font-size: 11.5px;
+  font-size: 11px;
   line-height: 1.5;
 }
 
@@ -576,8 +576,8 @@
 .mk-dist {
   display: flex;
   flex-direction: column;
-  gap: 7px;
-  padding: 10px 0;
+  gap: 8px;
+  padding: 8px 0;
   border-bottom: 1px solid var(--line);
 }
 
@@ -593,7 +593,7 @@
 }
 
 .mk-dist-group {
-  padding-left: 10px;
+  padding-left: 8px;
   border-left: 2px solid var(--line-strong);
 }
 
@@ -621,9 +621,9 @@
 .mk-dist-bar {
   height: 7px;
   min-width: 1px;
-  border-radius: 3px;
+  border-radius: 6px;
   background: var(--cyan-fill);
-  border: 1px solid var(--cyan-dim);
+  border: 1px solid var(--glass-border);
 }
 
 .mk-dist-count {

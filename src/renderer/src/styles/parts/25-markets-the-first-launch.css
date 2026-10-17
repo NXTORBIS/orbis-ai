@@ -13,10 +13,10 @@
 .mk-onboard {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 16px;
   flex: 1 1 auto;
   min-height: 0;
-  padding: 18px 20px 20px;
+  padding: 16px 20px 20px;
   overflow-y: auto;
 }
 
@@ -30,12 +30,12 @@
 .mk-onboard-brand {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   font-family: var(--display);
   font-size: 11px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--cyan);
+  color: var(--text);
 }
 
 .mk-onboard-rail {
@@ -50,7 +50,7 @@
   height: 3px;
   flex: 1 1 auto;
   max-width: 34px;
-  border-radius: 2px;
+  border-radius: 6px;
   background: var(--line-strong);
   transition: background 160ms ease;
 }
@@ -60,7 +60,7 @@
 }
 
 .mk-onboard-rail i.done {
-  background: var(--cyan-dim);
+  background: var(--panel);
 }
 
 .mk-onboard-rail i.on {
@@ -93,7 +93,7 @@
 .mk-onboard-resumed {
   margin: -8px 0 0;
   font-size: 11px;
-  color: var(--cyan);
+  color: var(--faint);
 }
 
 .mk-onboard-body {
@@ -127,14 +127,14 @@
 .mk-onboard-why {
   margin: 0;
   max-width: 62ch;
-  font-size: 12.5px;
+  font-size: 13px;
   line-height: 1.55;
   color: var(--muted);
 }
 
 .mk-onboard-affects {
   margin: auto 0 0;
-  padding-top: 10px;
+  padding-top: 8px;
   border-top: 1px solid var(--line);
   font-size: 11px;
   color: var(--faint);
@@ -146,7 +146,7 @@
 }
 
 .mk-onboard-welcome p {
-  margin: 0 0 10px;
+  margin: 0 0 8px;
   max-width: 62ch;
   font-size: 13px;
   line-height: 1.6;
@@ -155,11 +155,11 @@
 
 .mk-onboard-welcome ul {
   margin: 0;
-  padding-left: 18px;
+  padding-left: 16px;
   display: flex;
   flex-direction: column;
-  gap: 5px;
-  font-size: 12.5px;
+  gap: 4px;
+  font-size: 13px;
   color: var(--muted);
 }
 
@@ -184,9 +184,9 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding: 11px 13px;
+  padding: 12px 12px;
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: 10px;
   background: var(--pill-bg);
   color: var(--text);
   font: inherit;
@@ -222,7 +222,7 @@
 }
 
 .mk-onboard-card small {
-  font-size: 11.5px;
+  font-size: 11px;
   line-height: 1.45;
   color: var(--muted);
 }
@@ -239,13 +239,13 @@
   flex-direction: column;
   gap: 2px;
   margin-top: 4px;
-  padding-top: 6px;
+  padding-top: 4px;
   border-top: 1px solid var(--line);
 }
 
 .mk-onboard-preview i {
   font-style: normal;
-  font-size: 10.5px;
+  font-size: 10px;
   color: var(--faint);
 }
 
@@ -258,7 +258,7 @@
 .mk-onboard-currency {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   min-height: 0;
 }
 
@@ -266,7 +266,7 @@
 .mk-onboard-chosen {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 4px;
 }
 
 .mk-onboard-suggest button {
@@ -276,7 +276,7 @@
   color: var(--muted);
   font: inherit;
   font-size: 11px;
-  padding: 3px 10px;
+  padding: 3px 8px;
   cursor: pointer;
 }
 
@@ -288,21 +288,21 @@
 .mk-onboard-chosen button {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  border: 1px solid var(--cyan-dim);
+  gap: 4px;
+  border: 1px solid var(--glass-border);
   border-radius: var(--radius-pill, 999px);
   background: var(--active);
   color: var(--text);
   font: inherit;
   font-size: 11px;
-  padding: 3px 8px 3px 5px;
+  padding: 3px 8px 3px 4px;
   cursor: pointer;
 }
 
 .mk-onboard-results {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 6px;
+  gap: 4px;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -315,7 +315,7 @@
   align-items: center;
   gap: 8px;
   width: 100%;
-  padding: 7px 10px;
+  padding: 8px 8px;
   border: 1px solid var(--line);
   border-radius: 10px;
   background: transparent;
@@ -335,7 +335,7 @@
 }
 
 .mk-onboard-results b {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
 }
 
@@ -354,7 +354,7 @@
   justify-content: center;
   width: 20px;
   font-size: 13px;
-  color: var(--cyan);
+  color: var(--text);
 }
 
 .mk-onboard-review dl {
@@ -365,14 +365,13 @@
 }
 
 .mk-onboard-review dl > div {
-  padding: 9px 12px;
-  border: 1px solid var(--line);
+  padding: 8px 12px;
   border-radius: 10px;
   background: var(--pill-bg);
 }
 
 .mk-onboard-review dt {
-  font-size: 10.5px;
+  font-size: 10px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--faint);
@@ -380,26 +379,26 @@
 
 .mk-onboard-review dd {
   margin: 3px 0 0;
-  font-size: 12.5px;
+  font-size: 13px;
   color: var(--text);
   text-transform: capitalize;
 }
 
 .mk-onboard-problems {
-  margin: 0 0 10px;
-  padding: 9px 12px 9px 28px;
+  margin: 0 0 8px;
+  padding: 8px 12px 8px 28px;
   border: 1px solid var(--danger-border);
   border-radius: 10px;
   background: var(--danger-bg);
   color: var(--danger);
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .mk-onboard-foot {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 8px;
   padding-top: 12px;
   border-top: 1px solid var(--line);
 }
@@ -407,14 +406,14 @@
 .mk-onboard-foot button {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 7px 16px;
+  gap: 4px;
+  padding: 8px 16px;
   border: 1px solid var(--line);
   border-radius: var(--radius-pill, 999px);
   background: transparent;
   color: var(--text);
   font: inherit;
-  font-size: 12px;
+  font-size: 13px;
   cursor: pointer;
 }
 
@@ -447,19 +446,19 @@
 
 .mk-onboard-centre h2 {
   margin: 0;
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 600;
 }
 
 .mk-onboard-centre .mk-primary {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 18px;
+  gap: 4px;
+  padding: 8px 16px;
   border: 1px solid var(--cyan-dim);
   border-radius: var(--radius-pill, 999px);
   font: inherit;
-  font-size: 12.5px;
+  font-size: 13px;
   cursor: pointer;
 }
 
@@ -467,14 +466,14 @@
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 6px;
+  gap: 4px;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
 .mk-onboard-summary li {
-  padding: 3px 10px;
+  padding: 3px 8px;
   border: 1px solid var(--line);
   border-radius: var(--radius-pill, 999px);
   font-size: 11px;
@@ -483,7 +482,7 @@
 }
 
 .mk-spin {
-  color: var(--cyan);
+  color: var(--text);
   animation: mk-spin 900ms linear infinite;
 }
 

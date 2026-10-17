@@ -8,7 +8,7 @@
 }
 
 .default-browser-state {
-  font-size: 12.5px;
+  font-size: 13px;
   color: var(--faint);
 }
 
@@ -21,10 +21,10 @@
 .vault {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
 }
 
 .queue-btn.danger {
-  border-color: color-mix(in srgb, var(--danger, #ff6b6b) 40%, transparent);
-  color: var(--danger, #ff6b6b);
+  border-color: color-mix(in srgb, var(--danger, var(--red)) 40%, transparent);
+  color: var(--danger, var(--red));
 }

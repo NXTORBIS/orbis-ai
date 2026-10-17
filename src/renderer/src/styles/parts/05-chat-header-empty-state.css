@@ -73,10 +73,10 @@
 .labs-btn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   height: 26px;
-  padding: 0 10px;
-  border-radius: 13px;
+  padding: 0 8px;
+  border-radius: 10px;
   border: 1px solid var(--glass-border);
   background: transparent;
   color: var(--muted);
@@ -90,14 +90,14 @@
 }
 
 .labs-btn:hover {
-  background: rgba(63, 216, 255, 0.08);
-  border-color: rgba(63, 216, 255, 0.35);
-  color: var(--cyan);
+  background: var(--hover);
+  border-color: var(--glass-border);
+  color: var(--text);
 }
 
 .labs-btn.open {
-  background: rgba(63, 216, 255, 0.14);
-  border-color: rgba(63, 216, 255, 0.45);
+  background: var(--cyan-fill);
+  border-color: var(--cyan-dim);
   color: var(--cyan);
 }
 
@@ -113,7 +113,7 @@
   }
 
   .labs-btn {
-    padding: 0 7px;
+    padding: 0 8px;
   }
 }
 
@@ -127,7 +127,7 @@
   justify-content: center;
   min-width: 0;
   overflow: hidden;
-  font-size: 13.5px;
+  font-size: 13px;
   font-weight: 600;
   text-align: center;
 }
@@ -144,9 +144,9 @@
 .status {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   font-family: var(--mono);
-  font-size: 10.5px;
+  font-size: 10px;
   letter-spacing: 0.08em;
   color: var(--muted);
 }
@@ -172,10 +172,10 @@
 .share-btn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   height: 30px;
-  padding: 0 10px;
-  border-radius: 8px;
+  padding: 0 8px;
+  border-radius: 6px;
   font-size: 13px;
   font-weight: 500;
 }
@@ -191,23 +191,21 @@
   height: 28px;
   flex-shrink: 0;
   border-radius: 50%;
-  font-size: 11.5px;
+  font-size: 11px;
   font-weight: 700;
 }
 
 .user-avatar {
-  margin-left: 6px;
+  margin-left: 4px;
   background: var(--avatar-bg);
   border: 1px solid var(--avatar-border);
   color: var(--text);
-  box-shadow: 0 0 10px var(--cyan-glow-soft);
 }
 
 .assistant-avatar {
   background: var(--pill-bg);
   border: 1px solid var(--avatar-border);
-  color: var(--cyan);
-  box-shadow: 0 0 12px var(--cyan-glow-soft);
+  color: var(--faint);
 }
 
 /* ================= Empty state & greeting ================= */
@@ -222,7 +220,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
   padding: 0 24px;
 }
 
@@ -245,7 +243,7 @@
   left: auto;
   transform: none;
   gap: 4px;
-  padding: 6px var(--chat-inset) 8px;
+  padding: 4px var(--chat-inset) 8px;
 }
 
 .stage-content:not(:has(.empty-state)) .disclaimer {
@@ -294,16 +292,22 @@
   animation: glitch-skew 0.3s steps(2) infinite;
 }
 
+/*
+ * The glitch is two offset copies of the greeting in two hues -- a colour split, the way a bad signal looks. The
+ * hues were a pale cyan and a pale periwinkle, which only exist against a dark page; on a light one the whole
+ * effect vanished. Mixing the accent and the violet towards --text keeps them pale on dark and takes them deep on
+ * light, so the split reads either way.
+ */
 .greeting.glitching::before {
   opacity: 0.75;
-  color: #7df3ff;
+  color: color-mix(in srgb, var(--cyan) 60%, var(--text));
   clip-path: inset(0 0 52% 0);
   animation: glitch-top 0.22s steps(2) infinite;
 }
 
 .greeting.glitching::after {
   opacity: 0.6;
-  color: #9fb8ff;
+  color: color-mix(in srgb, var(--violet) 60%, var(--text));
   clip-path: inset(48% 0 0 0);
   animation: glitch-bottom 0.26s steps(2) infinite;
 }
@@ -312,7 +316,7 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 7px 14px;
+  padding: 8px 12px;
   border-radius: 999px;
   font-size: 13px;
   color: var(--cyan);

@@ -32,7 +32,7 @@
   align-items: center;
   gap: 8px;
   height: var(--mstrip-height, 26px);
-  padding: 0 6px 0 10px;
+  padding: 0 4px 0 8px;
   background: color-mix(in srgb, var(--bg-mid) 88%, transparent);
   backdrop-filter: blur(14px);
   border-top: 1px solid var(--glass-border);
@@ -68,9 +68,9 @@
 .mstrip-item {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 0 14px;
-  font-size: 11.5px;
+  gap: 4px;
+  padding: 0 12px;
+  font-size: 11px;
   color: var(--text);
   border-right: 1px solid color-mix(in srgb, var(--glass-border) 60%, transparent);
 }
@@ -85,7 +85,7 @@
 }
 
 .mstrip-change {
-  font-size: 10.5px;
+  font-size: 10px;
   font-weight: 600;
 }
 
@@ -103,7 +103,7 @@
 
 /* Nothing is labelled live that is not. A delayed or stale price says so on the item. */
 .mstrip-item > small {
-  font-size: 9px;
+  font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--faint);
@@ -115,7 +115,7 @@
 
 .mstrip-none {
   margin: 0;
-  font-size: 11.5px;
+  font-size: 11px;
   color: var(--faint);
 }
 
@@ -169,10 +169,10 @@
 }
 
 .mstrip-state {
-  font-size: 9.5px;
+  font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.07em;
-  padding: 2px 6px;
+  padding: 2px 4px;
   border-radius: 999px;
 }
 
@@ -182,8 +182,8 @@
 }
 
 .mstrip-state.is-delayed {
-  color: #ffbe4d;
-  background: color-mix(in srgb, #ffbe4d 14%, transparent);
+  color: var(--amber);
+  background: color-mix(in srgb, var(--amber) 14%, transparent);
 }
 
 .mstrip-state.is-down {
@@ -230,34 +230,34 @@
   pointer-events: auto;
   align-self: flex-end;
   width: min(360px, calc(100vw - 24px));
-  margin: 0 10px 2px;
+  margin: 0 8px 2px;
   padding: 12px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   max-height: min(60vh, 460px);
   overflow-y: auto;
   background: color-mix(in srgb, var(--bg-mid) 96%, transparent);
   backdrop-filter: blur(18px);
   border: 1px solid var(--glass-border);
-  border-radius: 12px;
-  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.5);
+  border-radius: 10px;
+  box-shadow: 0 18px 44px var(--shadow-color);
 }
 
 .mstrip-panel-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 12.5px;
+  font-size: 13px;
   color: var(--text);
 }
 
 .mstrip-row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   flex-wrap: wrap;
-  row-gap: 6px;
+  row-gap: 4px;
 }
 
 .mstrip-row-label {
@@ -273,7 +273,7 @@
 }
 
 .mstrip-chip {
-  padding: 3px 9px;
+  padding: 3px 8px;
   font-size: 11px;
   border: 1px solid var(--glass-border);
   border-radius: 999px;
@@ -283,7 +283,7 @@
 }
 
 .mstrip-chip[aria-pressed="true"] {
-  color: var(--bg-mid);
+  color: var(--on-accent);
   background: var(--cyan);
   border-color: var(--cyan);
 }
@@ -292,7 +292,7 @@
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  padding: 9px;
+  padding: 8px;
   text-align: left;
   border: 1px solid var(--glass-border);
   border-radius: 10px;
@@ -314,11 +314,11 @@
 }
 
 .mstrip-auto b {
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .mstrip-auto small {
-  font-size: 10.5px;
+  font-size: 10px;
   line-height: 1.4;
   color: var(--faint);
 }
@@ -326,21 +326,21 @@
 .mstrip-add {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   padding: 0 8px;
   border: 1px solid var(--glass-border);
-  border-radius: 8px;
+  border-radius: 6px;
   color: var(--faint);
 }
 
 .mstrip-add > input {
   flex: 1 1 auto;
   min-width: 0;
-  padding: 7px 0;
+  padding: 8px 0;
   border: 0;
   background: none;
   color: var(--text);
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .mstrip-add > input:focus {
@@ -362,13 +362,13 @@
   align-items: center;
   gap: 8px;
   width: 100%;
-  padding: 5px 6px;
+  padding: 4px 4px;
   border: 0;
-  border-radius: 7px;
+  border-radius: 6px;
   background: transparent;
   color: var(--faint);
   cursor: pointer;
-  font-size: 12px;
+  font-size: 13px;
   text-align: left;
 }
 
@@ -383,7 +383,7 @@
 }
 
 .mstrip-code {
-  font-size: 10.5px;
+  font-size: 10px;
   color: var(--faint);
 }
 
@@ -397,10 +397,10 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 4px 6px;
-  font-size: 11.5px;
+  padding: 4px 4px;
+  font-size: 11px;
   color: var(--text);
-  border-radius: 7px;
+  border-radius: 6px;
 }
 
 .mstrip-chosen li:hover {
@@ -414,7 +414,7 @@
 /* Where each one came from, so "why is this on my strip" always has an answer. */
 .mstrip-origin {
   margin-left: auto;
-  font-size: 9.5px;
+  font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--faint);

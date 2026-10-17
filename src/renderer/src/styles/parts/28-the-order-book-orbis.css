@@ -9,14 +9,14 @@
 .mk-book-warning {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   margin: 0;
-  padding: 7px 11px;
-  border: 1px solid rgba(255, 190, 77, 0.35);
+  padding: 8px 12px;
+  border: 1px solid color-mix(in srgb, var(--amber) 35%, transparent);
   border-radius: 10px;
-  background: rgba(255, 190, 77, 0.1);
+  background: color-mix(in srgb, var(--amber) 10%, transparent);
   color: var(--amber);
-  font-size: 11.5px;
+  font-size: 11px;
 }
 
 .mk-book-touch b.up {
@@ -31,9 +31,8 @@
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 9px;
-  padding: 7px 11px;
-  border: 1px solid var(--line);
+  gap: 8px;
+  padding: 8px 12px;
   border-radius: 10px;
   background: var(--pill-bg);
   font-size: 11px;
@@ -42,7 +41,7 @@
 .mk-book-lean > span:first-child {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
 }
 
 .mk-book-ladder {
@@ -73,7 +72,7 @@
   z-index: 1;
   padding: 4px 8px;
   background: var(--bg-center);
-  font-size: 9.5px;
+  font-size: 10px;
   font-weight: 500;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -114,7 +113,7 @@
 .mk-book-bar i {
   display: block;
   height: 10px;
-  border-radius: 2px;
+  border-radius: 6px;
   opacity: 0.22;
 }
 
@@ -130,8 +129,8 @@
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 10px;
-  padding: 5px 8px;
+  gap: 8px;
+  padding: 4px 8px;
   border-top: 1px solid var(--line-strong);
   border-bottom: 1px solid var(--line-strong);
   background: var(--pill-bg);
@@ -139,7 +138,7 @@
 }
 
 .mk-book-ladder tbody.mid b {
-  font-size: 12.5px;
+  font-size: 13px;
   color: var(--text);
 }
 
@@ -160,12 +159,12 @@
 }
 
 .mk-depth-chart path.up {
-  fill: rgba(62, 229, 138, 0.18);
+  fill: color-mix(in srgb, var(--green) 18%, transparent);
   stroke: var(--green);
 }
 
 .mk-depth-chart path.down {
-  fill: rgba(255, 77, 109, 0.18);
+  fill: color-mix(in srgb, var(--red) 18%, transparent);
   stroke: var(--red);
 }
 
@@ -173,7 +172,7 @@
   display: flex;
   justify-content: space-between;
   font-family: var(--mono);
-  font-size: 9.5px;
+  font-size: 10px;
   color: var(--faint);
 }
 
@@ -188,7 +187,7 @@
   justify-content: center;
   padding: 2px;
   border: 0;
-  border-radius: 5px;
+  border-radius: 6px;
   background: transparent;
   color: var(--faint);
   cursor: pointer;
@@ -221,16 +220,24 @@
   container-name: pages-view;
 }
 
-.pages-search {
+/*
+ * The pill you type a request into: "write me a Page that…", or the name of a code file to make.
+ *
+ * It used to be the search box as well, on Pages and in Create, and was called `.pages-search` because of it.
+ * Those two are the window's one shared search box now, so this is only the asking pill — and the name says so,
+ * because a box you type a request into and a box that narrows a list are not the same control even when they
+ * happen to be the same shape.
+ */
+.pages-ask {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   padding: 4px 8px;
   border: 1px solid var(--pill-border);
   border-radius: 999px;
   background: var(--pill-bg);
   color: var(--muted);
-  /* So a search box placed in a narrow column shrinks with it instead of pushing out of it. */
+  /* So one placed in a narrow column shrinks with it instead of pushing out of it. */
   min-width: 0;
 }
 
@@ -242,7 +249,7 @@
  * the box is narrow, at 880px and under, the field would not shrink and the whole search ran 160 pixels out of its
  * column. 190px is now the size it *prefers*, which is what it always should have been.
  */
-.pages-search input {
+.pages-ask input {
   flex: 1 1 190px;
   /* A floor, so it wraps or the box grows rather than the field collapsing to a few characters of its placeholder. */
   min-width: 90px;
@@ -253,7 +260,7 @@
   outline: none;
 }
 
-.pages-search input::placeholder {
+.pages-ask input::placeholder {
   color: var(--faint);
 }
 
@@ -307,7 +314,7 @@
 }
 
 .pages-side-head {
-  margin: 14px 0 4px;
+  margin: 12px 0 4px;
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.06em;
@@ -322,9 +329,9 @@
   justify-content: space-between;
   gap: 8px;
   width: 100%;
-  padding: 6px 10px;
+  padding: 4px 8px;
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: 6px;
   background: transparent;
   color: var(--muted);
   font: inherit;
@@ -370,9 +377,9 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 12px 14px;
+  padding: 12px 12px;
   border: 1px solid var(--glass-border);
-  border-radius: 12px;
+  border-radius: 10px;
   background: var(--glass);
 }
 
@@ -389,7 +396,7 @@
 
 .pages-card-head h3 {
   margin: 0;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
 }
 
@@ -404,12 +411,12 @@
 }
 
 .pages-card-title:hover {
-  color: var(--cyan);
+  color: var(--text);
 }
 
 .pages-card-desc {
   margin: 0;
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.5;
   color: var(--muted);
 }
@@ -418,15 +425,14 @@
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 4px;
 }
 
 .pages-tag {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 2px 7px;
-  border: 1px solid var(--pill-border);
+  padding: 2px 8px;
   border-radius: 999px;
   background: var(--pill-bg);
   font-size: 10px;
@@ -448,28 +454,22 @@
   color: var(--faint);
 }
 
-.pages-empty {
-  margin: 24px 0;
-  color: var(--muted);
-}
-
 .pages-unavailable {
   margin-top: 20px;
-  padding: 12px 14px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
+  padding: 12px 12px;
+  border-radius: 10px;
   background: var(--pill-bg);
 }
 
 .pages-unavailable h3 {
-  margin: 0 0 6px;
-  font-size: 12px;
+  margin: 0 0 4px;
+  font-size: 13px;
   color: var(--amber);
 }
 
 .pages-unavailable p {
   margin: 4px 0;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--muted);
 }
 
@@ -477,9 +477,8 @@
 
 .pages-permissions {
   margin: 0 16px;
-  padding: 12px 14px;
-  border: 1px solid var(--glass-border);
-  border-radius: 12px;
+  padding: 12px 12px;
+  border-radius: 10px;
   background: var(--glass);
 }
 
@@ -496,8 +495,8 @@
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
-  margin: 5px 0;
-  font-size: 12px;
+  margin: 4px 0;
+  font-size: 13px;
   color: var(--muted);
 }
 
@@ -522,7 +521,7 @@
 
 .pages-limitation {
   margin: 4px 0;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--muted);
 }
 
@@ -545,7 +544,7 @@
   display: flex;
   align-items: flex-end;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 8px;
 }
 
 .page-field {
@@ -571,9 +570,9 @@
 }
 
 .page-field input {
-  padding: 7px 10px;
+  padding: 8px 8px;
   border: 1px solid var(--line-strong);
-  border-radius: 8px;
+  border-radius: 6px;
   background: var(--pill-bg);
   color: var(--text);
   font: inherit;
@@ -587,9 +586,9 @@
 /* A dropdown in a Page field. Styled to match the text inputs beside it: the global rule sets only the font, which
    would leave a select wearing the browser's own chrome next to an input wearing ours. */
 .page-field select {
-  padding: 7px 10px;
+  padding: 8px 8px;
   border: 1px solid var(--line-strong);
-  border-radius: 8px;
+  border-radius: 6px;
   background: var(--pill-bg);
   color: var(--text);
   font: inherit;
@@ -607,13 +606,13 @@
   width: 16px;
   height: 16px;
   padding: 0;
-  border-radius: 4px;
+  border-radius: 6px;
   accent-color: var(--cyan);
   cursor: pointer;
 }
 
 .page-arrow {
-  margin-bottom: 9px;
+  margin-bottom: 8px;
   color: var(--faint);
 }
 
@@ -622,10 +621,10 @@
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
-  padding: 10px 14px;
-  border: 1px solid var(--cyan-dim);
+  padding: 8px 12px;
+  border: 1px solid var(--glass-border);
   border-radius: 10px;
-  background: var(--cyan-fill);
+  background: var(--panel);
   font-size: 15px;
   color: var(--text);
 }
@@ -655,8 +654,8 @@
   margin: 0;
   padding: 8px 12px;
   border: 1px solid var(--red);
-  border-radius: 8px;
-  font-size: 12px;
+  border-radius: 6px;
+  font-size: 13px;
   color: var(--red);
 }
 
@@ -670,11 +669,11 @@
 .page-chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 5px;
+  gap: 4px;
 }
 
 .page-chip {
-  padding: 3px 9px;
+  padding: 3px 8px;
   border: 1px solid var(--pill-border);
   border-radius: 999px;
   background: var(--pill-bg);
@@ -685,19 +684,19 @@
 }
 
 .page-chip:hover {
-  border-color: var(--cyan-dim);
+  border-color: var(--glass-border);
   color: var(--text);
 }
 
 .page-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .page-table th,
 .page-table td {
-  padding: 6px 10px;
+  padding: 4px 8px;
   border-bottom: 1px solid var(--line);
   text-align: left;
 }
@@ -715,11 +714,10 @@
 }
 
 .page-steps {
-  padding: 10px 14px;
-  border: 1px solid var(--line);
+  padding: 8px 12px;
   border-radius: 10px;
   background: var(--pill-bg);
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .page-steps summary {
@@ -728,6 +726,6 @@
 }
 
 .page-steps p {
-  margin: 6px 0;
+  margin: 4px 0;
   color: var(--muted);
 }

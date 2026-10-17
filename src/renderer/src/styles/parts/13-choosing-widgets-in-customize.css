@@ -2,9 +2,8 @@
 
 
 .cz-widget-row {
-  padding: 10px 12px;
-  border-radius: 12px;
-  border: 1px solid var(--line-strong);
+  padding: 8px 12px;
+  border-radius: 10px;
   background: var(--pill-bg-strong);
   min-width: 0;
 }
@@ -33,13 +32,13 @@
 .cz-widget-settings input[type='number'] {
   min-width: 0;
   max-width: 100%;
-  padding: 4px 6px;
-  border-radius: 8px;
+  padding: 4px 4px;
+  border-radius: 6px;
   border: 1px solid var(--line-strong);
   background: var(--pill-bg);
   color: var(--text);
   font: inherit;
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .cz-widget-settings {
@@ -52,27 +51,20 @@
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 4px;
   min-width: 0;
 }
 
-.cz-search {
-  width: 100%;
+/* The shared search box draws itself; this screen only says it spans the panel. */
+.cz-panel .ui-search {
   margin: 8px 0;
-  padding: 7px 10px;
-  border-radius: 10px;
-  border: 1px solid var(--line-strong);
-  background: var(--pill-bg);
-  color: var(--text);
-  font: inherit;
-  font-size: 13px;
 }
 
 .cz-chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  margin-bottom: 10px;
+  gap: 4px;
+  margin-bottom: 8px;
 }
 
 
@@ -88,16 +80,16 @@
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 10px;
+  gap: 8px;
 }
 
 .pw-state {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   margin: 0;
   color: var(--faint);
-  font-size: 12.5px;
+  font-size: 13px;
 }
 
 .pw-done {
@@ -111,22 +103,21 @@
   gap: 4px;
   width: 100%;
   max-width: 420px;
-  padding: 14px;
-  border-radius: 12px;
-  border: 1px solid var(--line-strong);
+  padding: 12px;
+  border-radius: 10px;
   background: var(--pill-bg-strong);
 }
 
 .pw-row {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 4px;
   margin-top: 8px;
 }
 
 .pw-row > span:first-child {
   color: var(--faint);
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .pw-field {
@@ -136,8 +127,8 @@
 
 .pw-field input {
   width: 100%;
-  padding: 7px 10px;
-  border-radius: 9px;
+  padding: 8px 8px;
+  border-radius: 10px;
   border: 1px solid var(--line-strong);
   background: var(--pill-bg);
   color: var(--text);
@@ -147,7 +138,7 @@
 
 /* Room for the button, so it never sits on top of what is typed. */
 .pw-field.has-reveal input {
-  padding-right: 42px;
+  padding-right: 40px;
 }
 
 .pw-reveal {
@@ -160,7 +151,7 @@
   height: 30px;
   transform: translateY(-50%);
   border: 0;
-  border-radius: 8px;
+  border-radius: 6px;
   background: transparent;
   color: var(--faint);
   cursor: pointer;
@@ -173,7 +164,7 @@
 
 .pw-meter {
   height: 3px;
-  margin: 8px 0 6px;
+  margin: 8px 0 4px;
   border-radius: 999px;
   background: var(--line-strong);
   overflow: hidden;
@@ -214,7 +205,7 @@
   min-height: 17px;
   margin: 0;
   color: var(--faint);
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.45;
 }
 
@@ -248,10 +239,9 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin: 10px 0 14px;
+  margin: 8px 0 12px;
   padding: 12px;
-  border-radius: 12px;
-  border: 1px solid var(--line-strong);
+  border-radius: 10px;
   background: var(--pill-bg-strong);
 }
 
@@ -259,13 +249,13 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
 }
 
 .cz-rule-word {
   min-width: 36px;
   color: var(--faint);
-  font-size: 12px;
+  font-size: 13px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
 }
@@ -274,8 +264,8 @@
 .cz-rule-row input {
   flex: 1 1 130px;
   min-width: 0;
-  padding: 6px 9px;
-  border-radius: 9px;
+  padding: 4px 8px;
+  border-radius: 10px;
   border: 1px solid var(--line-strong);
   background: var(--pill-bg);
   color: var(--text);
@@ -306,9 +296,8 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 12px;
-  border-radius: 12px;
-  border: 1px solid var(--line-strong);
+  padding: 8px 12px;
+  border-radius: 10px;
   background: var(--pill-bg-strong);
 }
 
@@ -336,6 +325,6 @@
 .cz-rule-why,
 .cz-rule-when {
   color: var(--faint);
-  font-size: 11.5px;
+  font-size: 11px;
   line-height: 1.4;
 }
