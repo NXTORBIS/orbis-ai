@@ -9,6 +9,12 @@ import { usePlayback } from './algoviz/usePlayback.js';
 import { ViewRenderer } from './algoviz/views.jsx';
 import { PlaybackControls, SpeedControl, Timeline, StepDescription, CodeView, VariableInspector, Statistics, ComplexityPanel, InputControls, ComparisonView, FavoritesBar } from './algoviz/panels.jsx';
 import PathGridEditor from './algoviz/PathGridEditor.jsx';
+import { useSurface } from '../lib/surfaces';
+import { algovizSurface, algovizAnimationSurface } from '../components/labs/algovizSurfaces';
+
+// Where this copy sits: the Computer Science Studio draws it as its Algorithms section, which registers nothing of
+// its own, so this one is a screen in its own right rather than a page inside something.
+const AT = null;
 
 // Seeded RNG so a given seed reproduces the same dataset.
 function seededRng(seed) { let s = seed; return () => { s = (s * 1664525 + 1013904223) | 0; return ((s >>> 0) % 100000) / 100000; }; }
@@ -113,6 +119,53 @@ export default function AlgorithmLab() {
   };
 
   const step = runResult?.steps[pb.idx];
+
+  /*
+   * What Orbis may do in this laboratory.
+   *
+   * Every reader below reads the state this screen already holds and every setter is a function one of its own
+   * controls already calls: the algorithm grid's click, the input box's change, the Run button, the speed buttons,
+   * the playback engine. Nothing here is a second way of doing any of it, which is why driving it from a sentence
+   * and doing it by hand cannot disagree.
+   *
+   * The declaration itself is in `components/labs/algovizSurfaces.ts`, as a function of this object, so that it can
+   * be tested without drawing this screen -- and so that the Toolkit's copy and the Computer Science Studio's copy
+   * describe themselves the same way rather than twice.
+   */
+  const asked = {
+    parent: AT,
+    algorithms: ALL_ALGORITHMS,
+    categories: CATEGORIES,
+    algorithm: () => algoId,
+    selectAlgorithm: selectAlgo,
+    search: () => query,
+    setSearch: setQuery,
+    category: () => activeCat,
+    setCategory: setActiveCat,
+    input: () => input,
+    setInput,
+    // Read the way the laboratory itself reads the box before a run, rather than parsed a second way here.
+    numbers: () => parseInput(input, 'array'),
+    options: () => opts,
+    setOptions: setOpts,
+    favourite: () => isFav,
+    toggleFavourite: fav,
+    fullScreen: () => expanded,
+    setFullScreen: setExpanded,
+    comparing: () => showCompare,
+    setComparing: setShowCompare,
+    picked: () => comparePick,
+    setPicked: (ids) => setComparePick([...ids]),
+    compare: runComparison,
+    comparison: () => compareResults,
+    run: onGenerate,
+    randomizeAndRun: onRandomizeRun,
+    steps: () => runResult?.steps ?? null,
+    playback: pb,
+    listed: () => filtered.length,
+  };
+  useSurface(algovizSurface(asked));
+  useSurface(algovizAnimationSurface(asked, AT ? `${AT}/algorithm-visualizer` : 'algorithm-visualizer'));
 
   return (
     <div className="pb-12">

@@ -17,12 +17,13 @@
   position: relative;
 
   /*
-   * Secondary text light enough to read. `--faint` is about 3.6:1 on the card behind it, under the 4.5:1 small
-   * text needs; this is the studio's own value and nothing outside it changes. Declared here rather than in
-   * physics.css because `.cs-studio` belongs to this sheet -- two sheets claiming one class is how a feature
-   * silently loses to load order.
+   * Secondary text readable on the card behind it. `--faint` is about 3.6:1 there, under the 4.5:1 small text
+   * needs. This used to answer with one hard-coded pale grey, which cleared the bar on the dark theme and then sat
+   * at about 2.3:1 on the light theme's near-white card. `--muted` is the token for this job and carries a value
+   * per theme: 6.9:1 on dark, 5.4:1 on light. Declared here rather than in physics.css because `.cs-studio`
+   * belongs to this sheet -- two sheets claiming one class is how a feature silently loses to load order.
    */
-  --jx-muted: #9aa1ad;
+  --jx-muted: var(--muted);
   display: flex;
   flex-direction: column;
   /*
