@@ -80,6 +80,19 @@ function tags(text: string, name: string): { attrs: string; inner: string; at: n
 function labelledElsewhere(text: string, attrs: string, at: number): boolean {
   const id = /\bid="([^"]+)"/.exec(attrs)?.[1]
   if (id && text.includes(`htmlFor="${id}"`)) return true
+  /*
+   * A field wired up by the shared Field.
+   *
+   * `Field` takes a required label, renders it as a real <label htmlFor>, and hands the control the matching id in
+   * `wiring`. So a control spread with that wiring is named by construction, and named better than most: it also
+   * carries aria-describedby for the hint and aria-invalid when something is wrong. That name never appears in the
+   * file being scanned, because the <label> is inside Field -- which is exactly why this check could not see it,
+   * and called three correctly labelled chess fields nameless.
+   */
+  if (/\{\.\.\.wiring\}/.test(attrs)) return true
+  // An id written as an expression rather than a literal, beside a htmlFor written the same way.
+  const expressionId = /\bid=(\{[^}]*\})/.exec(attrs)?.[1]
+  if (expressionId && text.includes(`htmlFor=${expressionId}`)) return true
   // Wrapped in a label: the nearest <label before it is nearer than the nearest </label>.
   const open = text.lastIndexOf('<label', at)
   const close = text.lastIndexOf('</label>', at)
