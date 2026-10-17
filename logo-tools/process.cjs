@@ -1,5 +1,5 @@
 // Builds the Orbis UI assets and app icons from the user's logo files.
-// Env: DARK_BG_LOGO (ring + wordmark on black), MARK (standalone ring), ASSET_DIR, ICON_PATH, ICON_ALT_PATH, ICON_STYLE (white|black), PREVIEW_PATH
+// Env: DARK_BG_LOGO (ring + wordmark on black), MARK (standalone ring), ASSET_DIR, ICON_PATH, PREVIEW_PATH
 const { app, nativeImage } = require('electron')
 const fs = require('node:fs')
 const path = require('node:path')
@@ -129,24 +129,9 @@ function solidCanvas(width, height, [r, g, b]) {
   return { width, height, data }
 }
 
-/** Anti-aliased rounded square filled with an opaque colour, transparent outside. */
-function roundedSquare(size, radius, [r, g, b]) {
-  const data = Buffer.alloc(size * size * 4)
-  for (let y = 0; y < size; y++) {
-    for (let x = 0; x < size; x++) {
-      const px = x + 0.5
-      const py = y + 0.5
-      const nx = Math.min(Math.max(px, radius), size - radius)
-      const ny = Math.min(Math.max(py, radius), size - radius)
-      const coverage = Math.max(0, Math.min(1, radius - Math.hypot(px - nx, py - ny) + 0.5))
-      const i = (y * size + x) * 4
-      data[i] = Math.round(b * coverage)
-      data[i + 1] = Math.round(g * coverage)
-      data[i + 2] = Math.round(r * coverage)
-      data[i + 3] = Math.round(255 * coverage)
-    }
-  }
-  return { width: size, height: size, data }
+/** An empty, fully transparent canvas to draw the mark onto. */
+function clearCanvas(width, height) {
+  return { width, height, data: Buffer.alloc(width * height * 4) }
 }
 
 function write(file, image) {
@@ -158,7 +143,7 @@ function write(file, image) {
 
 app.whenReady().then(() => {
   try {
-    const { DARK_BG_LOGO, MARK, ASSET_DIR, ICON_PATH, ICON_ALT_PATH, ICON_STYLE, PREVIEW_PATH } = process.env
+    const { DARK_BG_LOGO, MARK, ASSET_DIR, ICON_PATH, PREVIEW_PATH } = process.env
 
     // Wordmark (ring "O" + RBIS) from the black-background logo.
     const dark = alphaFromBlack(load(DARK_BG_LOGO))
@@ -174,18 +159,27 @@ app.whenReady().then(() => {
     const mark = fit(ringCrop, 256)
     write(path.join(ASSET_DIR, 'orbis-mark.png'), mark)
 
-    // App icons: the ring on a white and on a black rounded square.
-    const iconOn = (rgb) => {
-      const icon = roundedSquare(512, 112, rgb)
-      const scaled = fit(ringCrop, 400)
-      const { width, height } = scaled.getSize()
-      blit(icon, scaled, (512 - width) >> 1, (512 - height) >> 1)
-      return toImage(icon)
+    // App icon: the ring on its own, centred, with nothing behind it.
+    //
+    // This used to paint the ring onto a white or a black rounded square, and the white one is what shipped: a
+    // pale opaque plate with the artwork's own glow baked into it, which is what the owner saw. Windows, macOS
+    // and the browser all draw an app icon over whatever is behind it, so the plate was never wanted. The icon
+    // is a transparent square now, big enough that every size the app asks for is a downscale.
+    const ICON_SIZE = 1024
+    const ringWanted = Math.round(ICON_SIZE * 0.86)
+    const ringAt = fit(ringCrop, ringWanted)
+    const ringSize = ringAt.getSize()
+    if (Math.max(ringSize.width, ringSize.height) < ringWanted) {
+      // Blowing a small mark up is what made the old icon jagged, so draw it at the size it really is and say so.
+      console.warn(
+        `The mark is only ${raw.width}x${raw.height}, so the ring is drawn at ${ringSize.width}x${ringSize.height} ` +
+          `inside the ${ICON_SIZE}px icon instead of being blown up. Hand this tool a larger mark for a full-size icon.`
+      )
     }
-    const iconWhite = iconOn([255, 255, 255])
-    const iconBlack = iconOn([0, 0, 0])
-    write(ICON_PATH, ICON_STYLE === 'black' ? iconBlack : iconWhite)
-    write(ICON_ALT_PATH, ICON_STYLE === 'black' ? iconWhite : iconBlack)
+    const iconCanvas = clearCanvas(ICON_SIZE, ICON_SIZE)
+    blit(iconCanvas, ringAt, (ICON_SIZE - ringSize.width) >> 1, (ICON_SIZE - ringSize.height) >> 1)
+    const icon = toImage(iconCanvas)
+    write(ICON_PATH, icon)
 
     // Preview: assets on black (left) and on the light theme colour (right).
     const preview = solidCanvas(1400, 700, [0, 0, 0])
@@ -194,8 +188,9 @@ app.whenReady().then(() => {
     blit(preview, fit(mark, 160), 50, 320)
     blit(preview, fit(mark, 40), 250, 380)
     blit(preview, fit(mark, 22), 320, 390)
-    blit(preview, fit(iconWhite, 180), 380, 300)
-    blit(preview, fit(iconBlack, 180), 50, 500)
+    // The icon is transparent, so the preview shows it twice: once on black and once on the light theme colour.
+    blit(preview, fit(icon, 180), 380, 300)
+    blit(preview, fit(icon, 180), 1080, 300)
     blit(preview, fit(mark, 160), 750, 320)
     blit(preview, fit(mark, 40), 950, 380)
     blit(preview, fit(mark, 22), 1020, 390)
