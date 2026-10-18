@@ -45,3 +45,7 @@ cosmos/.build/
 cosmos/build/
 cosmos/core/build/
 cosmos/.gradle/
+
+# Build leftovers, not part of the project
+.ssr/
+bash.exe.stackdump
